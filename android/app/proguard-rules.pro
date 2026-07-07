@@ -8,3 +8,8 @@
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
 # Add any project specific keep options here:
+# ProGuard rules for In-App Purchases (react-native-iap)
+# Keep Google Play Billing Client classes from being obfuscated
+-keep class com.android.billingclient.** { *; }
+-keep class com.android.vending.billing.** { *; }
+-keep class io.github.hyochan.openiap.** { *; }

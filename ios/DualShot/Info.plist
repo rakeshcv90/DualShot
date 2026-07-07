@@ -33,10 +33,62 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>DualShot uses your camera to record videos and take photos, then generates both portrait and landscape versions of your recording.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>DualShot accesses your Documents folder to let you select files to share and to save received files.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>DualShot uses your local network to discover and connect to nearby devices for direct peer-to-peer sharing.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string>DualShot uses location services to help discover nearby devices for fast file sharing.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>DualShot requires microphone access to record high-quality audio for your videos.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>DualShot saves your captured videos directly to your photo library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>DualShot accesses your photo library to save and share your recordings.</string>
+  <key>NSAppleMusicUsageDescription</key>
+  <string>This app may access your media library to allow users to select audio or media content.</string>
+  <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+  <string>This app uses your location to provide location-based features when needed.</string>
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>This app uses your location to provide location-based features.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
+	<key>UIAppFonts</key>
+	<array>
+		<string>ProductSans-Black.ttf</string>
+		<string>ProductSans-BlackItalic.ttf</string>
+		<string>ProductSans-Bold.ttf</string>
+		<string>ProductSans-BoldItalic.ttf</string>
+		<string>ProductSans-Italic.ttf</string>
+		<string>ProductSans-Light.ttf</string>
+		<string>ProductSans-LightItalic.ttf</string>
+		<string>ProductSans-Medium.ttf</string>
+		<string>ProductSans-MediumItalic.ttf</string>
+		<string>ProductSans-Regular.ttf</string>
+		<string>ProductSans-Thin.ttf</string>
+		<string>ProductSans-ThinItalic.ttf</string>
+		<string>AntDesign.ttf</string>
+		<string>Entypo.ttf</string>
+		<string>EvilIcons.ttf</string>
+		<string>Feather.ttf</string>
+		<string>FontAwesome.ttf</string>
+		<string>FontAwesome5_Brands.ttf</string>
+		<string>FontAwesome5_Regular.ttf</string>
+		<string>FontAwesome5_Solid.ttf</string>
+		<string>FontAwesome6_Brands.ttf</string>
+		<string>FontAwesome6_Regular.ttf</string>
+		<string>FontAwesome6_Solid.ttf</string>
+		<string>Foundation.ttf</string>
+		<string>Ionicons.ttf</string>
+		<string>MaterialIcons.ttf</string>
+		<string>MaterialCommunityIcons.ttf</string>
+		<string>SimpleLineIcons.ttf</string>
+		<string>Octicons.ttf</string>
+		<string>Zocial.ttf</string>
+		<string>Fontisto.ttf</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIRequiredDeviceCapabilities</key>

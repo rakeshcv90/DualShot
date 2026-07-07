@@ -9,21 +9,37 @@
 /* Begin PBXBuildFile section */
 		0C80B921A6F3F58F76C31292 /* libPods-DualShot.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-DualShot.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		41D3BC242825670C1A3BA0ED /* DualCameraModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 4A96B7DCDFFEEC4F75CE9996 /* DualCameraModule.m */; };
 		54C39B362A43EDE63110D6FA /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		A5B2EDEF2FF7F5B5002C4B5C /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A5B2EDEE2FF7F5B5002C4B5C /* StoreKit.framework */; };
+		B1557502EE3D79983EDF1D00 /* DualCameraMainViewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A6B0A620A46AB54E7E097AA /* DualCameraMainViewManager.swift */; };
+		B1BBE21E0FE00701894428E7 /* DualCameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97EC1BCB93EDCE88F158B199 /* DualCameraController.swift */; };
+		CF5729161B2D81B2394B6CAF /* DualCameraPipViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 43078CF102CD28C1AF1E9C06 /* DualCameraPipViewManager.m */; };
+		D8DF864CC135058A20EA3E96 /* DualCameraModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EDE6F01FBC9052131013148 /* DualCameraModule.swift */; };
+		E5094621D649C540613DE819 /* DualCameraPipViewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03806BB669886314995D0733 /* DualCameraPipViewManager.swift */; };
+		F9A68FF3EADE2F5EC7D439D7 /* DualCameraMainViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = A93D33C685C4348A217F1A4B /* DualCameraMainViewManager.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		03806BB669886314995D0733 /* DualCameraPipViewManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DualCameraPipViewManager.swift; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* DualShot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DualShot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = DualShot/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = DualShot/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = DualShot/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		1A6B0A620A46AB54E7E097AA /* DualCameraMainViewManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DualCameraMainViewManager.swift; sourceTree = "<group>"; };
+		1EDE6F01FBC9052131013148 /* DualCameraModule.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DualCameraModule.swift; sourceTree = "<group>"; };
 		3B4392A12AC88292D35C810B /* Pods-DualShot.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DualShot.debug.xcconfig"; path = "Target Support Files/Pods-DualShot/Pods-DualShot.debug.xcconfig"; sourceTree = "<group>"; };
+		43078CF102CD28C1AF1E9C06 /* DualCameraPipViewManager.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = DualCameraPipViewManager.m; sourceTree = "<group>"; };
+		4A96B7DCDFFEEC4F75CE9996 /* DualCameraModule.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = DualCameraModule.m; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-DualShot.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DualShot.release.xcconfig"; path = "Target Support Files/Pods-DualShot/Pods-DualShot.release.xcconfig"; sourceTree = "<group>"; };
 		5DCACB8F33CDC322A6C60F78 /* libPods-DualShot.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-DualShot.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = DualShot/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = DualShot/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		97EC1BCB93EDCE88F158B199 /* DualCameraController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DualCameraController.swift; sourceTree = "<group>"; };
+		A5B2EDEE2FF7F5B5002C4B5C /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
+		A93D33C685C4348A217F1A4B /* DualCameraMainViewManager.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = DualCameraMainViewManager.m; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -33,6 +49,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0C80B921A6F3F58F76C31292 /* libPods-DualShot.a in Frameworks */,
+				A5B2EDEF2FF7F5B5002C4B5C /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -47,6 +64,7 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
+				82D644F8FC34F08039B1E1EC /* DualCamera */,
 			);
 			name = DualShot;
 			sourceTree = "<group>";
@@ -54,10 +72,26 @@
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				A5B2EDEE2FF7F5B5002C4B5C /* StoreKit.framework */,
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
 				5DCACB8F33CDC322A6C60F78 /* libPods-DualShot.a */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		82D644F8FC34F08039B1E1EC /* DualCamera */ = {
+			isa = PBXGroup;
+			children = (
+				03806BB669886314995D0733 /* DualCameraPipViewManager.swift */,
+				1A6B0A620A46AB54E7E097AA /* DualCameraMainViewManager.swift */,
+				1EDE6F01FBC9052131013148 /* DualCameraModule.swift */,
+				97EC1BCB93EDCE88F158B199 /* DualCameraController.swift */,
+				A93D33C685C4348A217F1A4B /* DualCameraMainViewManager.m */,
+				4A96B7DCDFFEEC4F75CE9996 /* DualCameraModule.m */,
+				43078CF102CD28C1AF1E9C06 /* DualCameraPipViewManager.m */,
+			);
+			name = DualCamera;
+			path = DualShot/DualCamera;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -191,9 +225,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-DualShot/Pods-DualShot-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-DualShot/Pods-DualShot-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -230,9 +268,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-DualShot/Pods-DualShot-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-DualShot/Pods-DualShot-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -247,6 +289,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
+				E5094621D649C540613DE819 /* DualCameraPipViewManager.swift in Sources */,
+				B1557502EE3D79983EDF1D00 /* DualCameraMainViewManager.swift in Sources */,
+				D8DF864CC135058A20EA3E96 /* DualCameraModule.swift in Sources */,
+				B1BBE21E0FE00701894428E7 /* DualCameraController.swift in Sources */,
+				F9A68FF3EADE2F5EC7D439D7 /* DualCameraMainViewManager.m in Sources */,
+				41D3BC242825670C1A3BA0ED /* DualCameraModule.m in Sources */,
+				CF5729161B2D81B2394B6CAF /* DualCameraPipViewManager.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -259,7 +308,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 4P2UTHTKB7;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = DualShot/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -267,14 +319,15 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.dualshot.photobooth;
 				PRODUCT_NAME = DualShot;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -289,21 +342,25 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 4P2UTHTKB7;
 				INFOPLIST_FILE = DualShot/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.dualshot.photobooth;
 				PRODUCT_NAME = DualShot;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
