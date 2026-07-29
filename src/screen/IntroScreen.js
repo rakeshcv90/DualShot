@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   arrow: {
     fontSize: moderateScale(20),
     fontWeight: 'bold',
-    color: COLORS.buttonText,
+    color: '#fff',
   },
 });
 

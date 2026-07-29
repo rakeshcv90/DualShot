@@ -553,7 +553,7 @@ const OnboardingQuestions = ({ navigation }) => {
                   <CustomText
                     style={[styles.allowBtnText, { color: colors.white }]}
                   >
-                    Allow
+                 Continue
                   </CustomText>
                 )}
               </TouchableOpacity>

@@ -55,12 +55,12 @@ export const translations = {
     welcomeSubtitle: "Let's get you set up for the best experience.",
     permissionCamera: 'Camera Access',
     permissionCameraDesc:
-      'Required to record video and generate both portrait and landscape versions.',
+      'Required to capture photos and videos for orientation conversion',
     permissionAudio: 'Microphone Access',
-    permissionAudioDesc: 'Required to capture crystal clear sound.',
+    permissionAudioDesc: 'Required to record audio with your videos.',
     permissionStorage: 'Library Access',
     permissionStorageDesc:
-      'Required to save your masterpieces to your gallery.',
+      'Required to save recordings to your Photo Library.',
     enabled: 'Enabled',
     nextGenCamera: 'The Next Gen Camera',
     initializing: 'Initializing Optics...',
@@ -68,10 +68,10 @@ export const translations = {
     question1Subtext: "We'll tailor Dual Cam to fit your workflow.",
     question2Title: 'Where will you post?',
     question2Subtext: "Select all that apply, we'll optimize exports for each.",
-    readyToRecord: 'Ready to record',
+    readyToRecord: 'Ready to Record',
     readyToRecordDesc:
-      'Camera, microphone and photo library access are required.',
-    tapContinue: 'Tap Continue to grant access',
+      'To use all recording features, please grant access to your Camera, Microphone, and Photo Library',
+    tapContinue: 'Tap Continue to request the required permissions.',
     readyToShoot: 'Ready to shoot',
     readyToShootDesc: 'Long-form on YouTube, Shorts on Reels, from one take.',
     neverMissRender: 'Never miss a render',
@@ -202,12 +202,12 @@ export const translations = {
     welcomeSubtitle: 'En iyi deneyim için sizi hazırlayalım.',
     permissionCamera: 'Kamera Erişimi',
     permissionCameraDesc:
-      'Video kaydetmek ve hem dikey hem yatay sürümler oluşturmak için gereklidir.',
+      'Yönlendirme dönüşümü için fotoğraf ve video çekebilmek adına gereklidir.',
     permissionAudio: 'Mikrofon Erişimi',
-    permissionAudioDesc: 'Kristal netliğinde ses yakalamak için gereklidir.',
+    permissionAudioDesc:  'Videolarınızla birlikte ses kaydetmek için gereklidir.',
     permissionStorage: 'Kitaplık Erişimi',
     permissionStorageDesc:
-      'Başyapıtlarınızı galerinize kaydetmek için gereklidir.',
+    'Kayıtları Fotoğraf Kitaplığınıza kaydetmek için gereklidir.',
     allow: 'İzin Ver',
     enabled: 'Etkin',
     nextGenCamera: 'Yeni Nesil Kamera',
@@ -218,8 +218,8 @@ export const translations = {
     question2Subtext: 'Uygulananların tümünü seçin, çıktıları optimize edelim.',
     readyToRecord: 'Kayda hazır',
     readyToRecordDesc:
-      'Tam deneyim için kamera, mikrofon ve kitaplık erişimi gereklidir.',
-    tapContinue: "Erişim vermek için Devam'a dokunun",
+      'Tüm kayıt özelliklerini kullanabilmek için lütfen Kamera, Mikrofon ve Fotoğraf Kitaplığı erişim izinlerini verin',
+    tapContinue:   'Gerekli izinleri istemek için Devam Et’e dokunun.',
     readyToShoot: 'Çekime hazır',
     readyToShootDesc: 'YouTube için yatay, Reels için dikey, tek çekimden.',
     neverMissRender: 'İşlemi asla kaçırmayın',
@@ -351,13 +351,13 @@ export const translations = {
     welcome: 'Willkommen bei DualShot',
     welcomeSubtitle: 'Lassen Sie uns Sie für das beste Erlebnis einrichten.',
     permissionCamera: 'Kamerazugriff',
-    permissionCameraDesc:
-      'Erforderlich, um Videos aufzunehmen und sowohl Hoch- als auch Querformat-Versionen zu erstellen.',
+  permissionCameraDesc:
+  'Vereist om foto- en video\'s vast te leggen voor oriëntatieconversie.',
     permissionAudio: 'Mikrofonzugriff',
-    permissionAudioDesc: 'Erforderlich für kristallklaren Sound.',
+    permissionAudioDesc:   "Vereist om audio bij je video's op te nemen.",
     permissionStorage: 'Bibliothekszugriff',
     permissionStorageDesc:
-      'Erforderlich, um Ihre Meisterwerke in Ihrer Galerie zu speichern.',
+ "Vereist om opnamen op te slaan in uw fotobibliotheek.",
     allow: 'Zulassen',
     enabled: 'Aktiviert',
     nextGenCamera: 'Die Kamera der nächsten Generation',
@@ -368,8 +368,8 @@ export const translations = {
     question2Subtext: 'Wählen Sie alles aus, was zutrifft.',
     readyToRecord: 'Bereit zur Aufnahme',
     readyToRecordDesc:
-      'Kamera, Mikrofon und Bibliothekszugriff sind erforderlich.',
-    tapContinue: 'Tippen Sie auf Weiter, um Zugriff zu gewähren',
+      'Om alle opnamefuncties te gebruiken, geef toegang tot je camera, microfoon en fotobibliotheek.',
+    tapContinue:   'Tik op Doorgaan om de vereiste machtigingen aan te vragen.',
     readyToShoot: 'Bereit zum Schießen',
     readyToShootDesc:
       'Long-Form auf YouTube, Shorts auf Reels, aus einer Aufnahme.',
@@ -502,12 +502,12 @@ export const translations = {
     welcomeSubtitle: 'आइए आपको बेहतरीन अनुभव के लिए तैयार करते हैं।',
     permissionCamera: 'कैमरा एक्सेस',
     permissionCameraDesc:
-      'वीडियो रिकॉर्ड करने और पोर्ट्रेट व लैंडस्केप दोनों वर्शन बनाने के लिए आवश्यक है।',
+      'ओरिएंटेशन बदलने के लिए फ़ोटो और वीडियो कैप्चर करने हेतु आवश्यक।',
     permissionAudio: 'माइक्रोफ़ोन एक्सेस',
-    permissionAudioDesc: 'क्रिस्टल क्लियर साउंड कैप्चर करने के लिए आवश्यक है।',
+    permissionAudioDesc:   'आपके वीडियो के साथ ऑडियो रिकॉर्ड करने के लिए आवश्यक।',
     permissionStorage: 'लाइब्रेरी एक्सेस',
     permissionStorageDesc:
-      'आपकी मास्टरपीस को आपकी गैलरी में सहेजने के लिए आवश्यक है।',
+      'रिकॉर्डिंग को आपकी फ़ोटो लाइब्रेरी में सहेजने के लिए आवश्यक।',
     allow: 'अनुमति दें',
     enabled: 'सक्षम',
     nextGenCamera: 'अगली पीढ़ी का कैमरा',
@@ -518,8 +518,8 @@ export const translations = {
     question2Subtext: 'जो लागू हो उसे चुनें, हम अनुकूलित करेंगे।',
     readyToRecord: 'रिकॉर्ड करने के लिए तैयार',
     readyToRecordDesc:
-      'पूर्ण अनुभव के लिए कैमरा, माइक्रोफ़ोन और लाइब्रेरी एक्सेस आवश्यक है।',
-    tapContinue: 'एक्सेस देने के लिए जारी रखें पर टैप करें',
+      'सभी रिकॉर्डिंग सुविधाओं का उपयोग करने के लिए, कृपया कैमरा, माइक्रोफ़ोन और फ़ोटो लाइब्रेरी की अनुमति दें।',
+    tapContinue:  'आवश्यक अनुमतियों का अनुरोध करने के लिए "जारी रखें" पर टैप करें।',
     readyToShoot: 'शूट करने के लिए तैयार',
     readyToShootDesc: 'YouTube पर लॉन्ग-फॉर्म, Reels पर Shorts, एक टेक से।',
     neverMissRender: 'कभी रेंडर न चूकें',

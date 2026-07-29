@@ -1,5 +1,5 @@
 /* eslint-disable react-native/no-inline-styles */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -39,24 +39,24 @@ const LANG_MAP = {
   en: 'English',
   tr: 'Türkçe',
   de: 'Deutsch',
-  fr: 'Français',
-  it: 'Italiano',
-  fa: 'فارسی',
-  ru: 'Русский',
+  // fr: 'Français',
+  // it: 'Italiano',
+  // fa: 'فارسی',
+  // ru: 'Русский',
   hi: 'हिन्दी',
-  pt: 'Português',
-  es: 'Español',
-  ja: '日本',
-  ko: '한국인',
-  zh: '中国人',
-  id: 'Indonesian',
-  th: 'ไทย',
-  vi: 'Tiếng Việt',
-  ar: 'Arabic',
-  nl: 'Nederlands',
-  uk: 'Українська',
-  pl: 'Dialekt',
-  he: 'Hebrew',
+  // pt: 'Português',
+  // es: 'Español',
+  // ja: '日本',
+  // ko: '한국인',
+  // zh: '中国人',
+  // id: 'Indonesian',
+  // th: 'ไทย',
+  // vi: 'Tiếng Việt',
+  // ar: 'Arabic',
+  // nl: 'Nederlands',
+  // uk: 'Українська',
+  // pl: 'Dialekt',
+  // he: 'Hebrew',
 };
 
 const SettingsScreen = ({ navigation }) => {
@@ -69,6 +69,18 @@ const SettingsScreen = ({ navigation }) => {
   // const [showPaywall, setShowPaywall] = useState(false);
   // TODO: Uncomment showPaywall state when Pro features are needed
   const [userId] = useState(() => generateRandomUserId());
+
+  // 4K + simultaneous movie/photo/data outputs exceeds what iPad camera hardware can
+  // sustain (confirmed on device: black preview, or a hard capture-hardware fault when
+  // switching camera position). iPhone handles it fine, so only iPad is capped here.
+  const isTablet = Platform.OS === 'ios' && Platform.isPad;
+  const videoQualityOptions = isTablet ? ['1080p'] : ['1080p', '4K'];
+
+  useEffect(() => {
+    if (isTablet && resolution === '4K') {
+      dispatch(setResolution('1080p'));
+    }
+  }, [isTablet, resolution, dispatch]);
 
   const handleCopyUserId = () => {
     Clipboard.setString(userId);
@@ -242,7 +254,7 @@ const SettingsScreen = ({ navigation }) => {
               </CustomText>
             </View>
             <SegmentedControl
-              options={['1080p', '4K']}
+              options={videoQualityOptions}
               activeValue={resolution}
               onSelect={val => dispatch(setResolution(val))}
             />

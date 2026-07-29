@@ -138,12 +138,15 @@ const HomeScreen = ({ navigation }) => {
     return () => subscription.remove();
   }, [cameraPosition]);
 
-  // Update camera when settings change
+  // Update camera when resolution/fps settings change (NOT when camera position flips)
+  // Camera position changes are handled exclusively by switchCamera() in flipCamera().
+  // Including cameraPosition here caused a race condition crash on iPad:
+  // switchCamera() on background thread + openCamera() on main thread = SIGABRT
   useEffect(() => {
     if (cameraReady) {
       dualCamera.openCamera(cameraPosition, { resolution, fps });
     }
-  }, [resolution, fps, cameraPosition, cameraReady]);
+  }, [resolution, fps, cameraReady]);
 
   // Timer
   useEffect(() => {
@@ -497,7 +500,7 @@ const HomeScreen = ({ navigation }) => {
               width: currentPip.w,
               height: currentPip.w * (9 / 16),
               transform: pan.getTranslateTransform(),
-              bottom: moderateScale(160), // Move it up a bit
+              bottom: moderateScale(210),
             },
           ]}
         >
@@ -944,7 +947,7 @@ const styles = StyleSheet.create({
   // PIP
   pipContainer: {
     position: 'absolute',
-    bottom: moderateScale(200),
+    bottom: moderateScale(210),
     alignSelf: 'center',
     borderRadius: moderateScale(18), // More rounded for modern look
     borderWidth: 2,

@@ -27,7 +27,7 @@ export const DARK_COLORS = {
   white: '#FFFFFF',
   grey: '#94a3b8',
   buttonBg: '#f1f5f9',
-  buttonText: '#000000',
+  buttonText: '#fff',
 };
 
 // Keeping this for backward compatibility during transition
