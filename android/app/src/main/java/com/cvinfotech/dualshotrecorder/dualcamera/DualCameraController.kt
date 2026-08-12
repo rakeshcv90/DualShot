@@ -240,7 +240,8 @@ object DualCameraController {
         try {
             // Setup MediaRecorder
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            val videoFile = File(context.cacheDir, "DualShot_$timestamp.mp4")
+            val ext = if (fileFormat == "MOV") "mov" else "mp4"
+            val videoFile = File(context.cacheDir, "DualShot_$timestamp.$ext")
             currentVideoPath = videoFile.absolutePath
 
             mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -486,6 +487,12 @@ object DualCameraController {
                             builder.set(
                                 CaptureRequest.CONTROL_AF_MODE,
                                 CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO
+                            )
+
+                            // Apply Target FPS
+                            builder.set(
+                                CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+                                android.util.Range(targetFps, targetFps)
                             )
 
                             // Torch

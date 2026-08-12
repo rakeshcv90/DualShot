@@ -469,26 +469,48 @@ import AudioToolbox
     private var photoCaptureDelegate: PhotoCaptureDelegate?
     
     @objc func takePhoto(completion: @escaping (String?) -> Void) {
-        sessionQueue.async { [self] in
-            guard let output = photoOutput else {
-                completion(nil)
-                return
+        // Read device orientation on main thread to ensure accuracy
+        DispatchQueue.main.async {
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            let deviceOrientation = UIDevice.current.orientation
+            UIDevice.current.endGeneratingDeviceOrientationNotifications()
+            
+            self.sessionQueue.async { [weak self] in
+                guard let self = self, let output = self.photoOutput else {
+                    completion(nil)
+                    return
+                }
+
+                // Update the connection orientation to match physical device orientation
+                if let connection = output.connection(with: .video), connection.isVideoOrientationSupported {
+                    switch deviceOrientation {
+                    case .portraitUpsideDown:
+                        connection.videoOrientation = .portraitUpsideDown
+                    case .landscapeLeft:
+                        connection.videoOrientation = .landscapeRight
+                    case .landscapeRight:
+                        connection.videoOrientation = .landscapeLeft
+                    default:
+                        // Default to portrait if unknown or face up/down
+                        connection.videoOrientation = .portrait
+                    }
+                }
+
+                let settings = AVCapturePhotoSettings()
+
+                AudioServicesPlaySystemSound(1108)
+
+                if let device = self.currentDevice, device.hasTorch, device.torchMode == .on {
+                    settings.flashMode = .on
+                } else {
+                    settings.flashMode = .off
+                }
+
+                let delegate = PhotoCaptureDelegate(completion: completion)
+                self.photoCaptureDelegate = delegate
+
+                output.capturePhoto(with: settings, delegate: delegate)
             }
-
-            let settings = AVCapturePhotoSettings()
-
-            AudioServicesPlaySystemSound(1108)
-
-            if let device = currentDevice, device.hasTorch, device.torchMode == .on {
-                settings.flashMode = .on
-            } else {
-                settings.flashMode = .off
-            }
-
-            let delegate = PhotoCaptureDelegate(completion: completion)
-            self.photoCaptureDelegate = delegate
-
-            output.capturePhoto(with: settings, delegate: delegate)
         }
     }
 }
@@ -532,11 +554,23 @@ class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
             return
         }
         
+        var finalData = data
+        // Fix orientation for React Native which often ignores EXIF orientation flags
+        if let image = UIImage(data: data), image.imageOrientation != .up {
+            UIGraphicsBeginImageContextWithOptions(image.size, false, image.scale)
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+            if let normalizedImage = UIGraphicsGetImageFromCurrentImageContext(),
+               let jpegData = normalizedImage.jpegData(compressionQuality: 0.9) {
+                finalData = jpegData
+            }
+            UIGraphicsEndImageContext()
+        }
+        
         let paths = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
         let fileUrl = paths[0].appendingPathComponent("DualShot_\(Date().timeIntervalSince1970).jpg")
         
         do {
-            try data.write(to: fileUrl)
+            try finalData.write(to: fileUrl)
             completion?(fileUrl.path)
         } catch {
             print("Error saving photo: \(error)")

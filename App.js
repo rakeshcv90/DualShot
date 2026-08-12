@@ -6,10 +6,13 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider } from 'react-redux';
 import { store } from './src/redux/store';
 import { useInAppUpdate } from './src/hooks/useInAppUpdate';
+import { useProValidation } from './src/hooks/useProValidation';
 
 const AppContent = () => {
   // Check for updates on app start
   useInAppUpdate();
+  // Validate Pro subscription in the background
+  useProValidation();
 
   return (
     <NavigationContainer>

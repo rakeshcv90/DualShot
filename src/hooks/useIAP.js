@@ -1,37 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
+import { useDispatch } from 'react-redux';
+import { setIsPro, setActivePlan } from '../redux/slices/userSlice';
+import { storage } from '../storage/storage';
 import {
-  requestSubscription,
   requestPurchase,
-  getSubscriptions,
-  getProducts,
+  fetchProducts as fetchIAPProducts,
   purchaseUpdatedListener,
   purchaseErrorListener,
   initConnection,
   endConnection,
-  consumePurchase,
-  acknowledgePurchase,
-  flushFailedPurchasesCachedAsPendingAndroid,
+  finishTransaction,
+  getAvailablePurchases,
 } from 'react-native-iap';
 
 // Define your SKUs (Product IDs)
 // These must match exactly with your App Store Connect or Google Play Console listings
-const SKU_IOS_SUBSCRIPTIONS = ['com.dualshot.pro.monthly', 'com.dualshot.pro.yearly'];
-const SKU_ANDROID_SUBSCRIPTIONS = [
+const SKU_IOS_SUBSCRIPTIONS = [
   'com.dualshot.pro.monthly',
   'com.dualshot.pro.yearly',
 ];
-const SKU_IOS_PRODUCTS = ['com.dualshot.credits.100'];
-const SKU_ANDROID_PRODUCTS = ['com.dualshot.credits.100'];
-
-const ALL_SKUS = Platform.select({
-  ios: [...SKU_IOS_SUBSCRIPTIONS, ...SKU_IOS_PRODUCTS],
-  android: [...SKU_ANDROID_SUBSCRIPTIONS, ...SKU_ANDROID_PRODUCTS],
-}) || [];
+const SKU_ANDROID_SUBSCRIPTIONS = ['b_monthly', 'a_yearly'];
 
 export const useIAP = () => {
+  const dispatch = useDispatch();
   const [connected, setConnected] = useState(false);
-  const [products, setProducts] = useState([]);
+
   const [subscriptions, setSubscriptions] = useState([]);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [userPurchases, setUserPurchases] = useState([]);
@@ -48,15 +42,10 @@ export const useIAP = () => {
         setConnected(true);
         console.log('IAP Connection Initialized');
 
-        // Fetch products and subscriptions
-        await fetchProducts();
-
-        // Flush failed purchases (Android)
-        if (Platform.OS === 'android') {
-          await flushFailedPurchasesCachedAsPendingAndroid();
-        }
+        // Fetch subscriptions
+        await loadSubscriptions();
       } catch (err) {
-        console.error('IAP Init Error:', err);
+        console.log('IAP Init Error:', err);
         setError(err?.message);
       }
     };
@@ -80,45 +69,43 @@ export const useIAP = () => {
 
         try {
           // Handle the purchase
-          if (purchase.transactionReceipt) {
-            if (Platform.OS === 'ios') {
-              // iOS - acknowledge purchase
-              await acknowledgePurchase({
-                transactionId: purchase.transactionId,
-              });
-            } else if (Platform.OS === 'android') {
-              // Android - acknowledge purchase
-              await acknowledgePurchase({
-                purchaseToken: purchase.purchaseToken,
-                productId: purchase.productId,
-                isConsumable: false,
-              });
-
-              // If it's a consumable product, consume it
-              if (isConsumableProduct(purchase.productId)) {
-                await consumePurchase({
-                  purchaseToken: purchase.purchaseToken,
-                  productId: purchase.productId,
-                });
-              }
-            }
+          if (purchase.transactionReceipt || purchase.purchaseToken) {
+            // Both iOS and Android use finishTransaction in v15
+            await finishTransaction({ purchase, isConsumable: false });
 
             // Update user purchases
             setUserPurchases(prev => [...prev, purchase.productId]);
+
+            // Mark user as PRO in local storage and Redux
+            storage.set('isPro', true);
+            dispatch(setIsPro(true));
+            dispatch(setActivePlan(purchase.productId));
+
             setError(null);
           }
         } catch (err) {
-          console.error('Error handling purchase:', err);
+          console.log('Error handling purchase:', err);
           setError(err?.message);
         }
-      }
+      },
     );
 
     // Listen for purchase errors
     purchaseErrorSubscription.current = purchaseErrorListener(error => {
-      console.error('Purchase Error:', error);
+      const errorString = String(error?.message || error);
+      const isCancelled =
+        error?.code === 'E_USER_CANCELLED' ||
+        errorString.includes('user-canceled') ||
+        errorString.includes('user-cancelled');
+
+      if (isCancelled) {
+        console.log('Purchase cancelled by user');
+        setError('USER_CANCELLED');
+      } else {
+        console.log('Purchase Error:', error);
+        setError(error?.message || 'Purchase failed');
+      }
       setIsPurchasing(false);
-      setError(error?.message || 'Purchase failed');
     });
   };
 
@@ -131,65 +118,88 @@ export const useIAP = () => {
     }
   };
 
-  const fetchProducts = async () => {
+  const loadSubscriptions = async () => {
     try {
       // Fetch subscriptions
-      const subs = await getSubscriptions({
-        skus: Platform.OS === 'ios' ? SKU_IOS_SUBSCRIPTIONS : SKU_ANDROID_SUBSCRIPTIONS,
+      const subs = await fetchIAPProducts({
+        skus:
+          Platform.OS === 'ios'
+            ? SKU_IOS_SUBSCRIPTIONS
+            : SKU_ANDROID_SUBSCRIPTIONS,
+        type: 'subs',
       });
       setSubscriptions(subs);
       console.log('Subscriptions fetched:', subs);
-
-      // Fetch products
-      const prods = await getProducts({
-        skus: Platform.OS === 'ios' ? SKU_IOS_PRODUCTS : SKU_ANDROID_PRODUCTS,
-      });
-      setProducts(prods);
-      console.log('Products fetched:', prods);
     } catch (err) {
-      console.error('Error fetching products:', err);
+      console.log('Error fetching products:', err);
       setError(err?.message);
     }
   };
 
-  const isConsumableProduct = (productId) => {
-    // Define which products are consumable (can be purchased multiple times)
-    const consumableSkus = ['com.dualshot.credits.100'];
-    return consumableSkus.includes(productId);
-  };
-
-  const requestBuySubscription = async (subscriptionSku) => {
-    try {
-      setIsPurchasing(true);
-      setError(null);
-
-      await requestSubscription({
-        sku: subscriptionSku,
-      });
-    } catch (err) {
-      console.error('Subscription Request Error:', err);
-      setError(err?.message);
-      setIsPurchasing(false);
-    }
-  };
-
-  const requestBuyProduct = async (productSku) => {
+  const requestBuySubscription = async subscriptionSku => {
     try {
       setIsPurchasing(true);
       setError(null);
 
       await requestPurchase({
-        sku: productSku,
-        andDangerouslyFinishTransactionAutomaticallyIOS: false, // Handle manually
+        request: {
+          apple: { sku: subscriptionSku },
+          google: { skus: [subscriptionSku] },
+        },
+        type: 'subs',
       });
     } catch (err) {
-      console.error('Product Request Error:', err);
+      console.log('Subscription Request Error:', err);
       setError(err?.message);
       setIsPurchasing(false);
     }
   };
 
-  const checkSubscriptionStatus = (subscriptionSku) => {
+  const restorePurchases = async () => {
+    try {
+      setIsPurchasing(true);
+      setError(null);
+
+      const purchases = await getAvailablePurchases();
+      console.log('Purchases fetched:', purchases);
+      if (purchases && purchases.length > 0) {
+        // Extract product IDs from the available purchases
+        const productIds = purchases.map(purchase => purchase.productId);
+
+        // Update user purchases
+        setUserPurchases(prev => {
+          const newPurchases = [...new Set([...prev, ...productIds])];
+          return newPurchases;
+        });
+
+        // Mark user as PRO in local storage and Redux
+        storage.set('isPro', true);
+        dispatch(setIsPro(true));
+
+        // Save the first active product ID (if multiple, grab the first valid one)
+        dispatch(setActivePlan(productIds[0]));
+
+        setIsPurchasing(false);
+        return { success: true, count: purchases.length };
+      } else {
+        // No active subscriptions found - explicitly remove PRO access
+        storage.set('isPro', false);
+        dispatch(setIsPro(false));
+        dispatch(setActivePlan(null));
+        setUserPurchases([]);
+
+        setIsPurchasing(false);
+        return { success: true, count: 0 };
+      }
+    } catch (err) {
+      console.log('Error restoring purchases:', err);
+      setError(err?.message);
+      setIsPurchasing(false);
+      return { success: false, error: err };
+    }
+  };
+
+  const checkSubscriptionStatus = subscriptionSku => {
     return userPurchases.includes(subscriptionSku);
   };
 
@@ -200,21 +210,20 @@ export const useIAP = () => {
         setConnected(false);
       }
     } catch (err) {
-      console.error('Error disconnecting IAP:', err);
+      console.log('Error disconnecting IAP:', err);
     }
   };
 
   return {
     connected,
-    products,
     subscriptions,
     isPurchasing,
     userPurchases,
     error,
     requestBuySubscription,
-    requestBuyProduct,
     checkSubscriptionStatus,
-    fetchProducts,
+    fetchProducts: loadSubscriptions,
     disconnect,
+    restorePurchases,
   };
 };

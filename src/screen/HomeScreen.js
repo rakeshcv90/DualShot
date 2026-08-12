@@ -31,13 +31,15 @@ import {
 } from '../component/DualCameraView';
 import MediaToolkit from 'react-native-media-toolkit';
 import { loadImage } from 'react-native-nitro-image';
-// import PaywallModal from '../component/PaywallModal';
+import PaywallModal from '../component/PaywallModal';
+import { storage } from '../storage/storage';
 
 const { width, height } = Dimensions.get('window');
 
 const HomeScreen = ({ navigation }) => {
   const { t } = useTranslation();
   const { resolution, fps, fileFormat } = useSelector(state => state.settings);
+  const isPro = useSelector(state => state.user?.isPro);
   const [mode, setMode] = useState('video');
   const [isRecording, setIsRecording] = useState(false);
   const [cameraPosition, setCameraPosition] = useState('back');
@@ -100,6 +102,13 @@ const HomeScreen = ({ navigation }) => {
     };
   }, []);
 
+  // Show Paywall automatically if user is not Pro
+  useEffect(() => {
+    if (isPro === false) {
+      setShowPaywall(true);
+    }
+  }, [isPro]);
+
   // Handle Back Button for Exit
   useEffect(() => {
     const backAction = () => {
@@ -118,7 +127,6 @@ const HomeScreen = ({ navigation }) => {
     return () => backHandler.remove();
   }, [navigation]);
 
-  // Restart camera when app returns from background (e.g. after opening gallery)
   useEffect(() => {
     const appStateRef = { current: AppState.currentState };
     const handleAppState = nextState => {
@@ -126,7 +134,6 @@ const HomeScreen = ({ navigation }) => {
         appStateRef.current.match(/inactive|background/) &&
         nextState === 'active'
       ) {
-        // App returned to foreground - restart camera
         dualCamera.closeCamera();
         setTimeout(() => {
           dualCamera.openCamera(cameraPosition);
@@ -138,10 +145,6 @@ const HomeScreen = ({ navigation }) => {
     return () => subscription.remove();
   }, [cameraPosition]);
 
-  // Update camera when resolution/fps settings change (NOT when camera position flips)
-  // Camera position changes are handled exclusively by switchCamera() in flipCamera().
-  // Including cameraPosition here caused a race condition crash on iPad:
-  // switchCamera() on background thread + openCamera() on main thread = SIGABRT
   useEffect(() => {
     if (cameraReady) {
       dualCamera.openCamera(cameraPosition, { resolution, fps });
@@ -280,7 +283,6 @@ const HomeScreen = ({ navigation }) => {
         height: cropH,
       });
 
-      // Ensure the output path has file:// prefix for CameraRoll
       let outPath = landscapeResult.uri;
       if (!outPath.startsWith('file://')) {
         outPath = `file://${outPath}`;
@@ -297,18 +299,6 @@ const HomeScreen = ({ navigation }) => {
       setLandscapeDone(true); // Close the overlay eventually
     }
 
-    // // Generate a thumbnail from the recorded video for the gallery preview
-    // try {
-    //   const thumb = await MediaToolkit.getThumbnail(videoUri, {
-    //     timeMs: 0,
-    //     quality: Platform.OS === 'ios' ? 0 : 80,
-    //   });
-    //   setLastMedia({ type: 'video', path: videoPath, thumbnail: thumb.uri });
-    // } catch (thumbErr) {
-    //   console.log('Thumbnail error:', thumbErr);
-    //   setLastMedia({ type: 'video', path: videoPath, thumbnail: null });
-    // }
-
     setTimeout(() => setIsProcessing(false), 1000);
   };
 
@@ -318,8 +308,6 @@ const HomeScreen = ({ navigation }) => {
       photoUri = `file://${photoPath}`;
     }
 
-    // On Android, the native code already saves the portrait photo to gallery via MediaStore.
-    // It returns a cache file path for JS-side cropping.
     if (Platform.OS === 'android') {
       setPortraitDone(true);
     } else {
@@ -335,8 +323,6 @@ const HomeScreen = ({ navigation }) => {
     try {
       let image = await loadImage({ filePath: photoPath });
 
-      // Smart Dual-Crop: Always produce the "opposite" orientation.
-      // If we have landscape, crop a portrait center. If we have portrait, crop a landscape center.
       const currentRatio = image.width / image.height;
       const targetRatio = currentRatio > 1 ? 9 / 16 : 16 / 9;
 
@@ -392,6 +378,17 @@ const HomeScreen = ({ navigation }) => {
   const handleRecord = async () => {
     if (isProcessing) return;
 
+    // Check if free user is trying to capture more than their one free shot
+    if (isPro === false) {
+      const hasUsedFreeShot = storage.getBoolean('hasUsedFreeShot');
+      
+      // If they've used it, and they aren't currently trying to STOP a recording they started
+      if (hasUsedFreeShot && !isRecording) {
+        setShowPaywall(true);
+        return;
+      }
+    }
+
     if (mode === 'video') {
       if (isRecording) {
         setIsRecording(false);
@@ -406,6 +403,7 @@ const HomeScreen = ({ navigation }) => {
       } else {
         try {
           setIsRecording(true);
+          if (isPro === false) storage.set('hasUsedFreeShot', true);
           await dualCamera.startRecording({ resolution, fps, fileFormat });
         } catch (e) {
           setIsRecording(false);
@@ -413,6 +411,7 @@ const HomeScreen = ({ navigation }) => {
       }
     } else if (mode === 'photo') {
       setIsProcessing(true); // Disable button immediately
+      if (isPro === false) storage.set('hasUsedFreeShot', true);
       setPortraitDone(false);
       setLandscapeDone(false);
       try {
@@ -481,13 +480,15 @@ const HomeScreen = ({ navigation }) => {
               />
             </TouchableOpacity>
 
-            {/* <TouchableOpacity
-              onPress={() => setShowPaywall(true)}
-              style={styles.proHeaderBadge}
-            >
-              <Ionicons name="star" size={moderateScale(12)} color="#fff" />
-              <CustomText style={styles.proHeaderText}>PRO</CustomText>
-            </TouchableOpacity> */}
+            {!isPro && (
+              <TouchableOpacity
+                onPress={() => setShowPaywall(true)}
+                style={styles.proHeaderBadge}
+              >
+                <Ionicons name="star" size={moderateScale(12)} color="#fff" />
+                <CustomText style={styles.proHeaderText}>PRO</CustomText>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -612,10 +613,10 @@ const HomeScreen = ({ navigation }) => {
         resolution={resolution}
       />
 
-      {/* <PaywallModal
+      <PaywallModal
         visible={showPaywall}
         onClose={() => setShowPaywall(false)}
-      /> */}
+      />
 
       {/* Exit Modal */}
       <Modal

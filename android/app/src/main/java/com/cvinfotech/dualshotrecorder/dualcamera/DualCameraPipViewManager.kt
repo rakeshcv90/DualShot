@@ -1,14 +1,10 @@
 package com.cvinfotech.dualshotrecorder.dualcamera
 
-import android.graphics.RectF
 import android.graphics.SurfaceTexture
 import android.util.Log
 import android.view.Surface
 import android.view.TextureView
-import android.hardware.camera2.CameraCharacteristics
-import android.hardware.camera2.CameraManager
 import android.content.Context
-import android.view.WindowManager
 import com.facebook.react.uimanager.SimpleViewManager
 import com.facebook.react.uimanager.ThemedReactContext
 
@@ -31,7 +27,6 @@ class DualCameraPipViewManager : SimpleViewManager<TextureView>() {
         textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
             override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
                 Log.d(TAG, "PIP surface available: ${w}x${h}")
-                // Set native landscape resolution (1920x1080)
                 val bw = DualCameraController.getResolutionWidth()
                 val bh = DualCameraController.getResolutionHeight()
                 st.setDefaultBufferSize(bw, bh)
@@ -56,46 +51,43 @@ class DualCameraPipViewManager : SimpleViewManager<TextureView>() {
         return textureView
     }
 
+    /**
+     * Same center-crop logic as the main view.
+     */
     private fun updateTransform(view: TextureView, viewWidth: Int, viewHeight: Int) {
         if (viewWidth <= 0 || viewHeight <= 0) return
 
-        val matrix = android.graphics.Matrix()
-        val bufferW = DualCameraController.getResolutionWidth().toFloat()
-        val bufferH = DualCameraController.getResolutionHeight().toFloat()
+        val bufferWidth = DualCameraController.getResolutionWidth().toFloat()
+        val bufferHeight = DualCameraController.getResolutionHeight().toFloat()
+        if (bufferWidth <= 0 || bufferHeight <= 0) return
+
         val sensorOrientation = DualCameraController.getSensorOrientation(view.context)
-        val isFront = DualCameraController.isFrontCamera(view.context)
-        
-        if (bufferW <= 0 || bufferH <= 0) return
+        val isRotated = (sensorOrientation == 90 || sensorOrientation == 270)
+
+        val imageWidth = if (isRotated) bufferHeight else bufferWidth
+        val imageHeight = if (isRotated) bufferWidth else bufferHeight
 
         val vw = viewWidth.toFloat()
         val vh = viewHeight.toFloat()
         val centerX = vw / 2f
         val centerY = vh / 2f
-        
-        // TextureView internally applies SurfaceTexture.getTransformMatrix() which
-        // already handles sensor rotation. We only need aspect-fill scaling.
-        val isRotated = (sensorOrientation == 90 || sensorOrientation == 270)
-        val effectiveW = if (isRotated) bufferH else bufferW
-        val effectiveH = if (isRotated) bufferW else bufferH
-        
-        val scaleX = vw / effectiveW
-        val scaleY = vh / effectiveH
-        val fillScale = Math.max(scaleX, scaleY)
-        
-        val sx = fillScale * effectiveW / vw
-        val sy = fillScale * effectiveH / vh
-        matrix.setScale(sx, sy, centerX, centerY)
 
-        // Mirror for front camera
-        if (isFront) {
+        val stretchX = vw / imageWidth
+        val stretchY = vh / imageHeight
+        val cropScale = Math.max(stretchX, stretchY)
+
+        val correctionX = cropScale / stretchX
+        val correctionY = cropScale / stretchY
+
+        val matrix = android.graphics.Matrix()
+        matrix.setScale(correctionX, correctionY, centerX, centerY)
+
+        // PIP shows the OTHER camera, so mirror if it's the front camera
+        val isFrontPip = !DualCameraController.isFrontCamera(view.context)
+        if (isFrontPip) {
             matrix.postScale(-1f, 1f, centerX, centerY)
         }
-        
-        Log.d("DualPipView", "NoRotate: view=${viewWidth}x${viewHeight}, eff=${effectiveW}x${effectiveH}, sx=$sx, sy=$sy")
-        
+
         view.setTransform(matrix)
     }
-
-
-
 }

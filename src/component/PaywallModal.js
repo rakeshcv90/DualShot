@@ -14,6 +14,9 @@ import { moderateScale } from 'react-native-size-matters';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import CustomText from './CustomText';
+import { useIAP } from '../hooks/useIAP';
+import { useSelector } from 'react-redux';
+import { Platform, ActivityIndicator, Alert } from 'react-native';
 
 import { useTranslation } from '../hooks/useTranslation';
 
@@ -21,7 +24,109 @@ const { width, height } = Dimensions.get('window');
 
 const PaywallModal = ({ visible, onClose }) => {
   const { t } = useTranslation();
-  const [selectedPlan, setSelectedPlan] = React.useState('year');
+  const isPro = useSelector(state => state.user?.isPro);
+  const activePlanId = useSelector(state => state.user?.activePlanId);
+  const [selectedPlan, setSelectedPlan] = React.useState('yearly');
+  const [alertConfig, setAlertConfig] = React.useState({ visible: false, title: '', message: '', isSuccess: true });
+  const { requestBuySubscription, isPurchasing, subscriptions, restorePurchases, error } = useIAP();
+
+  React.useEffect(() => {
+    if (error) {
+      if (error === 'USER_CANCELLED') {
+        setAlertConfig({
+          visible: true,
+          isSuccess: false,
+          title: 'Purchase Cancelled',
+          message: 'You have cancelled the purchase process.'
+        });
+      } else {
+        setAlertConfig({
+          visible: true,
+          isSuccess: false,
+          title: 'Purchase Failed',
+          message: error
+        });
+      }
+    }
+  }, [error]);
+
+  // Helper to extract localized price from react-native-iap product object
+  const getSubPrice = (sku) => {
+    const sub = subscriptions?.find(s => s.productId === sku || s.id === sku);
+    if (!sub) return null;
+    
+    if (sub.displayPrice) return sub.displayPrice;
+    if (sub.localizedPrice) return sub.localizedPrice;
+
+    if (Platform.OS === 'ios') {
+      return sub.localizedPrice;
+    } else {
+      // Android Play Billing v6+ (v15 of IAP)
+      if (sub.subscriptionOfferDetailsAndroid && sub.subscriptionOfferDetailsAndroid.length > 0) {
+        return sub.subscriptionOfferDetailsAndroid[0].pricingPhases?.pricingPhaseList?.[0]?.formattedPrice;
+      }
+      if (sub.subscriptionOfferDetails && sub.subscriptionOfferDetails.length > 0) {
+        return sub.subscriptionOfferDetails[0].pricingPhases?.pricingPhaseList?.[0]?.formattedPrice;
+      }
+    }
+    return null;
+  };
+
+  const yearlyPrice = getSubPrice(Platform.OS === 'ios' ? 'com.dualshot.pro.yearly' : 'a_yearly') || '₹3,350.00';
+  const monthlyPrice = getSubPrice(Platform.OS === 'ios' ? 'com.dualshot.pro.monthly' : 'b_monthly') || '₹650.00';
+
+  const getWeeklyPriceString = (formattedPrice) => {
+    if (!formattedPrice) return '₹64.42';
+    const numericMatch = formattedPrice.match(/[\d,.]+/);
+    if (!numericMatch) return formattedPrice;
+    
+    let numericString = numericMatch[0].replace(/,/g, '');
+    const priceAmount = parseFloat(numericString);
+    if (isNaN(priceAmount)) return formattedPrice;
+    
+    const weeklyPrice = (priceAmount / 52).toFixed(2);
+    return formattedPrice.replace(numericMatch[0], weeklyPrice);
+  };
+
+  const yearlyWeeklyPrice = getWeeklyPriceString(yearlyPrice);
+
+  const handleContinue = async () => {
+    const sku = Platform.OS === 'ios'
+      ? (selectedPlan === 'yearly' ? 'com.dualshot.pro.yearly' : 'com.dualshot.pro.monthly')
+      : (selectedPlan === 'yearly' ? 'a_yearly' : 'b_monthly');
+
+    // Check if user already has this exact plan active
+    if (isPro && activePlanId === sku) {
+      setAlertConfig({
+        visible: true,
+        isSuccess: true,
+        title: 'Already Subscribed',
+        message: `You already have the ${selectedPlan === 'yearly' ? 'Yearly' : 'Monthly'} plan active. Enjoy your Pro features!`,
+      });
+      return;
+    }
+
+    await requestBuySubscription(sku);
+  };
+
+  const handleRestore = async () => {
+    const result = await restorePurchases();
+    if (result.success) {
+      setAlertConfig({
+        visible: true,
+        isSuccess: true,
+        title: 'Restore Complete',
+        message: result.count > 0 ? `Successfully restored ${result.count} purchase(s).` : 'No active subscriptions found to restore.'
+      });
+    } else {
+      setAlertConfig({
+        visible: true,
+        isSuccess: false,
+        title: 'Restore Failed',
+        message: result.error?.message || 'Could not restore purchases.'
+      });
+    }
+  };
 
   const FeatureItem = ({ text }) => (
     <View style={styles.featureItem}>
@@ -32,7 +137,7 @@ const PaywallModal = ({ visible, onClose }) => {
     </View>
   );
 
-  const PlanOption = ({ id, title, price, subPrice, badge, selected }) => (
+  const PlanOption = ({ id, title, price, subPrice, badge, selected, periodText, isActive }) => (
     <TouchableOpacity
       style={[styles.planOption, selected && styles.planOptionSelected]}
       onPress={() => setSelectedPlan(id)}
@@ -53,15 +158,24 @@ const PaywallModal = ({ visible, onClose }) => {
       </View>
       <View style={styles.planRight}>
         <CustomText style={styles.planPrice}>{price}</CustomText>
-        <CustomText style={styles.planPerWeek}>{t('perWeek')}</CustomText>
+        <CustomText style={styles.planPerWeek}>{periodText}</CustomText>
       </View>
-      {badge && (
+      {badge && !isActive && (
         <View style={styles.saveBadge}>
           <CustomText style={styles.saveBadgeText}>{badge}</CustomText>
         </View>
       )}
+      {isActive && (
+        <View style={[styles.saveBadge, { backgroundColor: '#00C853', borderColor: '#00C853' }]}>
+          <CustomText style={styles.saveBadgeText}>Current Plan</CustomText>
+        </View>
+      )}
     </TouchableOpacity>
   );
+
+  const isSelectedActive = 
+    (selectedPlan === 'yearly' && activePlanId?.includes('year')) ||
+    (selectedPlan === 'monthly' && activePlanId?.includes('month'));
 
   return (
     <Modal
@@ -126,59 +240,85 @@ const PaywallModal = ({ visible, onClose }) => {
               </CustomText>
             </View>
 
-            {/* Plans */}
-            <View style={styles.plansContainer}>
-              <PlanOption
-                id="year"
-                title={t('oneYear')}
-                subPrice={`${t('perYear')} ₹3,350.00`}
-                price="₹64.42"
-                badge={`${t('bestValue')} 90%`}
-                selected={selectedPlan === 'year'}
-              />
-              <PlanOption
-                id="week"
-                title={t('oneWeek')}
-                price="₹650.00"
-                selected={selectedPlan === 'week'}
-              />
-            </View>
+                <View style={styles.plansContainer}>
+                  <PlanOption
+                    id="yearly"
+                    title={t('oneYear')}
+                    subPrice={`${t('perYear')} ${yearlyPrice}`}
+                    price={yearlyWeeklyPrice}
+                    periodText={t('perWeek')}
+                    badge={`${t('bestValue')} 90%`}
+                    selected={selectedPlan === 'yearly'}
+                    isActive={activePlanId?.includes('year')}
+                  />
+                  <PlanOption
+                    id="monthly"
+                    title={t('oneMonth')}
+                    price={monthlyPrice}
+                    periodText={t('perMonth')}
+                    selected={selectedPlan === 'monthly'}
+                    isActive={activePlanId?.includes('month')}
+                  />
+                </View>
 
-            <CustomText style={styles.autoRenewText}>
-              {t('autoRenewable')}
-            </CustomText>
+                <CustomText style={styles.autoRenewText}>
+                  {t('autoRenewable')}
+                </CustomText>
 
-            {/* Continue Button */}
-            <TouchableOpacity style={styles.continueBtn} activeOpacity={0.8}>
-              <CustomText style={styles.continueText}>
-                {t('continue')}
+                {/* Continue Button */}
+                <TouchableOpacity 
+                  style={styles.continueBtn} 
+                  activeOpacity={0.8}
+                  onPress={handleContinue}
+                  disabled={isPurchasing}
+                >
+                  {isPurchasing ? (
+                    <ActivityIndicator color="#000" />
+                  ) : (
+                    <>
+                      <CustomText style={styles.continueText}>
+                        {isSelectedActive ? 'Subscribed' : t('continue')}
+                      </CustomText>
+                      {!isSelectedActive && (
+                        <Ionicons
+                          name="chevron-forward"
+                          size={moderateScale(20)}
+                          color="#000"
+                        />
+                      )}
+                    </>
+                  )}
+                </TouchableOpacity>
+
+            {/* Restore Button */}
+            <TouchableOpacity 
+              style={styles.restoreBtn} 
+              activeOpacity={0.7}
+              onPress={handleRestore}
+              disabled={isPurchasing}
+            >
+              <CustomText style={styles.restoreBtnText}>
+                {t('restorePurchases')}
               </CustomText>
-              <Ionicons
-                name="chevron-forward"
-                size={moderateScale(20)}
-                color="#000"
-              />
             </TouchableOpacity>
 
             {/* Footer */}
             <View style={styles.footer}>
               <View style={styles.securedRow}>
-                <Image
-                  source={require('../assets/images/playstore.png')}
-                  style={styles.playIcon}
-                  resizeMode="contain"
-                />
+                {Platform.OS === 'ios' ? (
+                  <Ionicons name="logo-apple" size={moderateScale(16)} color="#fff" style={styles.playIcon} />
+                ) : (
+                  <Image
+                    source={require('../assets/images/playstore.png')}
+                    style={styles.playIcon}
+                    resizeMode="contain"
+                  />
+                )}
                 <CustomText style={styles.securedText}>
-                  {t('securedPlayStore')}
+                  {Platform.OS === 'ios' ? t('securedAppStore') : t('securedPlayStore')}
                 </CustomText>
               </View>
               <View style={styles.linksRow}>
-                <TouchableOpacity>
-                  <CustomText style={styles.footerLink}>
-                    {t('restorePurchases')}
-                  </CustomText>
-                </TouchableOpacity>
-                <CustomText style={styles.footerDot}>•</CustomText>
                 <TouchableOpacity>
                   <CustomText style={styles.footerLink}>
                     {t('privacy')}
@@ -195,6 +335,36 @@ const PaywallModal = ({ visible, onClose }) => {
           </ScrollView>
         </SafeAreaView>
       </View>
+
+      {/* Custom Alert Modal */}
+      <Modal
+        visible={alertConfig.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAlertConfig({ ...alertConfig, visible: false })}
+      >
+        <View style={styles.alertOverlay}>
+          <View style={styles.alertContainer}>
+            <View style={[styles.alertIconContainer, { backgroundColor: alertConfig.isSuccess ? 'rgba(0, 200, 83, 0.1)' : 'rgba(255, 59, 48, 0.1)' }]}>
+              <Ionicons 
+                name={alertConfig.isSuccess ? 'checkmark-circle' : 'close-circle'} 
+                size={moderateScale(40)} 
+                color={alertConfig.isSuccess ? '#00C853' : '#FF3B30'} 
+              />
+            </View>
+            <CustomText style={styles.alertTitle}>{alertConfig.title}</CustomText>
+            <CustomText style={styles.alertMessage}>{alertConfig.message}</CustomText>
+            
+            <TouchableOpacity 
+              style={styles.alertBtn} 
+              activeOpacity={0.8}
+              onPress={() => setAlertConfig({ ...alertConfig, visible: false })}
+            >
+              <CustomText style={styles.alertBtnText}>Okay</CustomText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 };
@@ -430,8 +600,45 @@ const styles = StyleSheet.create({
     color: '#000',
     marginRight: moderateScale(10),
   },
+  restoreBtn: {
+    backgroundColor: 'transparent',
+    height: moderateScale(56),
+    borderRadius: moderateScale(28),
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.15)',
+    marginTop: moderateScale(16),
+  },
+  restoreBtnText: {
+    fontSize: moderateScale(16),
+    fontWeight: '600',
+    color: '#fff',
+  },
+  activeProContainer: {
+    marginTop: moderateScale(30),
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    padding: moderateScale(24),
+    borderRadius: moderateScale(20),
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  activeProTitle: {
+    fontSize: moderateScale(18),
+    fontWeight: '700',
+    color: '#fff',
+    marginTop: moderateScale(12),
+  },
+  activeProSubtitle: {
+    fontSize: moderateScale(14),
+    color: 'rgba(255,255,255,0.6)',
+    marginTop: moderateScale(6),
+    textAlign: 'center',
+  },
   footer: {
-    marginTop: moderateScale(24),
+    marginTop: moderateScale(32),
     alignItems: 'center',
   },
   securedRow: {
@@ -454,14 +661,65 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footerLink: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: moderateScale(10),
-    fontWeight: '500',
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: moderateScale(11),
   },
   footerDot: {
     color: 'rgba(255,255,255,0.2)',
     marginHorizontal: moderateScale(6),
     fontSize: moderateScale(10),
+  },
+  alertOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: moderateScale(20),
+  },
+  alertContainer: {
+    backgroundColor: '#1E1E1E',
+    borderRadius: moderateScale(24),
+    padding: moderateScale(24),
+    width: '100%',
+    maxWidth: moderateScale(340),
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  alertIconContainer: {
+    width: moderateScale(80),
+    height: moderateScale(80),
+    borderRadius: moderateScale(40),
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: moderateScale(16),
+  },
+  alertTitle: {
+    fontSize: moderateScale(20),
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: moderateScale(8),
+    textAlign: 'center',
+  },
+  alertMessage: {
+    fontSize: moderateScale(14),
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    marginBottom: moderateScale(24),
+    lineHeight: moderateScale(20),
+  },
+  alertBtn: {
+    backgroundColor: '#fff',
+    paddingVertical: moderateScale(14),
+    paddingHorizontal: moderateScale(32),
+    borderRadius: moderateScale(100),
+    width: '100%',
+    alignItems: 'center',
+  },
+  alertBtnText: {
+    color: '#000',
+    fontSize: moderateScale(16),
+    fontWeight: '700',
   },
 });
 

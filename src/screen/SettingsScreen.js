@@ -25,13 +25,15 @@ import { COLORS, SPACING } from '../theme/theme';
 import CustomText from '../component/CustomText';
 import Container from '../component/Container';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { generateRandomUserId, getAppVersionString } from '../utils/generateUserId';
+import {
+  generateRandomUserId,
+  getAppVersionString,
+} from '../utils/generateUserId';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 import { moderateScale } from 'react-native-size-matters';
 import { useTranslation } from '../hooks/useTranslation';
-// import PaywallModal from '../component/PaywallModal';
-// TODO: Uncomment PaywallModal when Pro features are needed
+import PaywallModal from '../component/PaywallModal';
 
 const { width } = Dimensions.get('window');
 
@@ -66,13 +68,10 @@ const SettingsScreen = ({ navigation }) => {
     state => state.settings,
   );
   const { colors, isDark } = useTheme();
-  // const [showPaywall, setShowPaywall] = useState(false);
-  // TODO: Uncomment showPaywall state when Pro features are needed
+  const [showPaywall, setShowPaywall] = useState(false);
+
   const [userId] = useState(() => generateRandomUserId());
 
-  // 4K + simultaneous movie/photo/data outputs exceeds what iPad camera hardware can
-  // sustain (confirmed on device: black preview, or a hard capture-hardware fault when
-  // switching camera position). iPhone handles it fine, so only iPad is capped here.
   const isTablet = Platform.OS === 'ios' && Platform.isPad;
   const videoQualityOptions = isTablet ? ['1080p'] : ['1080p', '4K'];
 
@@ -180,9 +179,7 @@ const SettingsScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Pro Banner - Commented out for now */}
-        {/* TODO: Uncomment Pro Banner when Pro features are needed    */}
-        {/* <View
+        <View
           style={[
             styles.proBanner,
             {
@@ -235,10 +232,8 @@ const SettingsScreen = ({ navigation }) => {
               color={colors.white}
             />
           </TouchableOpacity>
-        </View> */}
-    
+        </View>
 
-        {/* Camera Section */}
         <View style={styles.section}>
           <SectionHeader title={t('camera')} />
 
@@ -308,8 +303,6 @@ const SettingsScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Account Section - PRO+ commented out for now */}
-        {/* TODO: Uncomment PRO+ section when Pro features are needed
         <View style={styles.section}>
           <SectionHeader title={t('account')} />
           <TouchableOpacity
@@ -350,9 +343,7 @@ const SettingsScreen = ({ navigation }) => {
             />
           </TouchableOpacity>
         </View>
-        */}
 
-        {/* Preferences Section */}
         <View style={styles.section}>
           <SectionHeader title={t('preferences')} />
           <View style={[styles.settingItem, { marginTop: moderateScale(10) }]}>
@@ -424,7 +415,6 @@ const SettingsScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* App Info Section */}
         <View style={styles.section}>
           <SectionHeader title={t('appInfo')} />
 
@@ -489,16 +479,13 @@ const SettingsScreen = ({ navigation }) => {
             </View>
           </View>
         </View>
-
         <View style={{ height: moderateScale(40) }} />
       </ScrollView>
-     
-      {/* TODO: Uncomment PaywallModal when Pro features are needed
+
       <PaywallModal
         visible={showPaywall}
         onClose={() => setShowPaywall(false)}
       />
-      */}
     </Container>
   );
 };
