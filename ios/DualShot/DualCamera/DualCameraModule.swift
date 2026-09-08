@@ -26,8 +26,32 @@ class DualCameraModule: NSObject {
         DualCameraController.shared.setTorch(enabled: enabled)
     }
     
-    @objc func switchCamera(_ facing: String) {
-        DualCameraController.shared.switchCamera(facing: facing)
+    @objc func switchCamera(_ facing: String, config: [String: Any]?, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        DispatchQueue.main.async {
+            if let config = config {
+                DualCameraController.shared.updateSettings(config)
+            }
+            DualCameraController.shared.switchCamera(facing: facing) { success in
+                if success {
+                    resolve(true)
+                } else {
+                    reject("SWITCH_CAMERA_ERROR", "Failed to switch camera", nil)
+                }
+            }
+        }
+    }
+
+    // Mirrors Android's DualCameraModule.reopenCamera() — resolves with the
+    // success boolean rather than rejecting on failure, matching that.
+    @objc func reopenCamera(_ facing: String, config: [String: Any]?, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        DispatchQueue.main.async {
+            if let config = config {
+                DualCameraController.shared.updateSettings(config)
+            }
+            DualCameraController.shared.reopenCamera(facing: facing) { success in
+                resolve(success)
+            }
+        }
     }
     
     @objc func startRecording(_ config: [String: Any]?, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {

@@ -11,6 +11,16 @@ export const useInAppUpdate = () => {
   const [updateInfo, setUpdateInfo] = useState(null);
 
   useEffect(() => {
+    // Disabled on iOS for now — checkForUpdate() below calls
+    // checkNeedsUpdate({ appleId: '6736737373', ... }), a placeholder App
+    // Store Connect app ID that was never replaced with the real one. Since
+    // that lookup can never succeed, this network call just hangs for a
+    // long, variable amount of time on every cold launch before giving up
+    // — found to be the dominant cause of a 20-50s delay before the camera
+    // view appeared. Re-enable once a real Apple App ID is set above.
+    if (Platform.OS === 'ios') {
+      return;
+    }
     checkForUpdate();
   }, []);
 

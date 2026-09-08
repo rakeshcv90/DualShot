@@ -202,7 +202,7 @@ import AudioToolbox
         }
     }
     
-    @objc func openCamera(facing: String) {
+    @objc func openCamera(facing: String, completion: ((Bool) -> Void)? = nil) {
         sessionQueue.async { [self] in
             if captureSession != nil {
                 captureSession?.stopRunning()
@@ -226,9 +226,10 @@ import AudioToolbox
             
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else {
                 print("Failed to get camera device")
+                DispatchQueue.main.async { completion?(false) }
                 return
             }
-            
+
             currentDevice = device
             
             do {
@@ -300,18 +301,20 @@ import AudioToolbox
                 }
 
                 session.startRunning()
-                
+
                 DispatchQueue.main.async {
                     NotificationCenter.default.post(name: NSNotification.Name("DualCameraSessionReady"), object: session)
+                    completion?(true)
                 }
-                
+
             } catch {
                 print("Failed to setup camera input: \(error)")
+                DispatchQueue.main.async { completion?(false) }
             }
         }
     }
-    
-    @objc func switchCamera(facing: String) {
+
+    @objc func switchCamera(facing: String, completion: ((Bool) -> Void)? = nil) {
         // Flush PIP layer before switching to prevent stale frames from old camera
         pipQueue.sync {
             _pipLayer?.flushAndRemoveImage()
@@ -322,7 +325,7 @@ import AudioToolbox
             // it earlier (outside this queue) raced against openCamera()'s teardown of the same
             // property from sessionQueue and was the cause of the prior iPad SIGABRT.
             guard let session = captureSession else {
-                openCamera(facing: facing)
+                openCamera(facing: facing, completion: completion)
                 return
             }
 
@@ -339,6 +342,7 @@ import AudioToolbox
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else {
                 print("iOS: Failed to get \(facing) camera device")
                 session.commitConfiguration()
+                DispatchQueue.main.async { completion?(false) }
                 return
             }
             
@@ -349,12 +353,13 @@ import AudioToolbox
             self.applyBestPreset(for: session, position: position)
             
             self.currentDevice = device
-            
+
+            var success = false
             do {
                 let input = try AVCaptureDeviceInput(device: device)
                 if session.canAddInput(input) {
                     session.addInput(input)
-                    
+
                     // Re-apply orientation and mirroring for all outputs
                     for output in session.outputs {
                         if let connection = output.connection(with: .video) {
@@ -368,8 +373,9 @@ import AudioToolbox
                             }
                         }
                     }
-                    
+
                     self.applyFpsSettings(on: session)
+                    success = true
                 } else {
                     // canAddInput failed — this can happen if the preset is still
                     // incompatible. Fall back to the safest preset and retry.
@@ -392,6 +398,7 @@ import AudioToolbox
                             }
                         }
                         self.applyFpsSettings(on: session)
+                        success = true
                     } else {
                         print("iOS: CRITICAL — cannot add \(facing) camera input even at 720p")
                     }
@@ -399,19 +406,38 @@ import AudioToolbox
             } catch {
                 print("iOS: Failed to switch camera input: \(error)")
             }
-            
+
             session.commitConfiguration()
+            DispatchQueue.main.async { completion?(success) }
         }
     }
     
-    @objc func closeCamera() {
+    @objc func closeCamera(completion: (() -> Void)? = nil) {
         sessionQueue.async { [self] in
+            // AVCaptureSession.stopRunning() is synchronous (unlike Camera2's
+            // async close()/onClosed() on Android) — by the time this line
+            // returns the session is genuinely fully stopped, so completion
+            // can fire right here with no separate "wait for real close"
+            // signal needed.
             captureSession?.stopRunning()
             removeSessionObservers()
             captureSession = nil
             videoOutput = nil
             photoOutput = nil
             currentDevice = nil
+            DispatchQueue.main.async { completion?() }
+        }
+    }
+
+    /**
+     * Close-then-reopen the camera entirely on the native side. Mirrors
+     * Android's DualCameraModule.reopenCamera() — used when the app resumes
+     * from background (gallery visit, task switch) where the old session
+     * needs a clean restart.
+     */
+    @objc func reopenCamera(facing: String, completion: ((Bool) -> Void)? = nil) {
+        closeCamera { [self] in
+            openCamera(facing: facing, completion: completion)
         }
     }
 
@@ -436,9 +462,14 @@ import AudioToolbox
             }
 
             let paths = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
-            let fileUrl = paths[0].appendingPathComponent("DualShot_\(Date().timeIntervalSince1970).mp4")
+            // AVCaptureMovieFileOutput always writes QuickTime (.mov) content —
+            // that's the only container it can produce, regardless of what the
+            // user picked. The extension here reflects that raw capture
+            // truthfully; if "MP4" was requested, RecordingDelegate converts
+            // this .mov into a genuine .mp4 once recording finishes.
+            let fileUrl = paths[0].appendingPathComponent("DualShot_\(Date().timeIntervalSince1970).mov")
 
-            let delegate = RecordingDelegate(completion: completion)
+            let delegate = RecordingDelegate(completion: completion, requestedFileFormat: self.fileFormat)
 
             // We must hold a strong reference to the delegate until recording finishes
             // For simplicity, we just use a static reference or similar in a real app,
@@ -518,24 +549,69 @@ import AudioToolbox
 class RecordingDelegate: NSObject, AVCaptureFileOutputRecordingDelegate {
     var completion: ((String?) -> Void)?
     private var startCompletion: ((String?) -> Void)?
-    
-    init(completion: @escaping (String?) -> Void) {
+    private let requestedFileFormat: String
+
+    init(completion: @escaping (String?) -> Void, requestedFileFormat: String) {
         self.startCompletion = completion
+        self.requestedFileFormat = requestedFileFormat
         super.init()
     }
-    
+
     func fileOutput(_ output: AVCaptureFileOutput, didStartRecordingTo fileURL: URL, from connections: [AVCaptureConnection]) {
         startCompletion?(fileURL.path)
         startCompletion = nil
     }
-    
+
     func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
-        if error == nil {
-            completion?(outputFileURL.path)
-        } else {
+        guard error == nil else {
             completion?(nil)
+            completion = nil
+            return
         }
-        completion = nil
+
+        // The raw file is always QuickTime (.mov) — see startRecording(). Only
+        // convert when the user actually asked for MP4; MOV needs no work.
+        guard requestedFileFormat == "MP4" else {
+            completion?(outputFileURL.path)
+            completion = nil
+            return
+        }
+
+        RecordingDelegate.exportToMP4(sourceURL: outputFileURL) { [weak self] finalPath in
+            self?.completion?(finalPath)
+            self?.completion = nil
+        }
+    }
+
+    /// Converts a QuickTime (.mov) recording into a genuine MP4 container via
+    /// AVAssetExportSession — Apple's own AVFoundation API for exactly this,
+    /// no third-party dependency. Falls back to the original .mov path (still
+    /// playable almost everywhere) if the export session can't be created or
+    /// the export itself fails, so a conversion hiccup never loses the
+    /// recording outright.
+    private static func exportToMP4(sourceURL: URL, completion: @escaping (String?) -> Void) {
+        let outputURL = sourceURL.deletingPathExtension().appendingPathExtension("mp4")
+        try? FileManager.default.removeItem(at: outputURL)
+
+        let asset = AVURLAsset(url: sourceURL)
+        guard let exportSession = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
+            print("MP4 export: could not create export session, keeping .mov")
+            completion(sourceURL.path)
+            return
+        }
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mp4
+
+        exportSession.exportAsynchronously {
+            switch exportSession.status {
+            case .completed:
+                try? FileManager.default.removeItem(at: sourceURL)
+                completion(outputURL.path)
+            default:
+                print("MP4 export failed: \(exportSession.error?.localizedDescription ?? "unknown"), keeping .mov")
+                completion(sourceURL.path)
+            }
+        }
     }
 }
 

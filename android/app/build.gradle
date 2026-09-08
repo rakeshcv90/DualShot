@@ -26,8 +26,8 @@ android {
         applicationId "com.cvinfotech.dualshotrecorder"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 3
+        versionName "1.3"
     }
     signingConfigs {
         // debug {

@@ -1,4 +1,3 @@
-/* eslint-disable react/no-unstable-nested-components */
 import React from 'react';
 import {
   View,
@@ -19,8 +18,67 @@ import { useSelector } from 'react-redux';
 import { Platform, ActivityIndicator, Alert } from 'react-native';
 
 import { useTranslation } from '../hooks/useTranslation';
+import { SUBSCRIPTION_SKUS } from '../utils/iapSkus';
 
 const { width, height } = Dimensions.get('window');
+
+const FeatureItem = ({ text }) => (
+  <View style={styles.featureItem}>
+    <View style={styles.checkCircle}>
+      <Ionicons name="checkmark" size={moderateScale(14)} color="#000" />
+    </View>
+    <CustomText style={styles.featureText}>{text}</CustomText>
+  </View>
+);
+
+const PlanOption = ({
+  id,
+  title,
+  price,
+  subPrice,
+  badge,
+  selected,
+  periodText,
+  isActive,
+  onSelect,
+}) => (
+  <TouchableOpacity
+    style={[styles.planOption, selected && styles.planOptionSelected]}
+    onPress={() => onSelect(id)}
+    activeOpacity={0.8}
+  >
+    <View style={styles.planLeft}>
+      <View style={[styles.radioOuter, selected && styles.radioOuterSelected]}>
+        {selected && (
+          <Ionicons name="checkmark" size={moderateScale(14)} color="#000" />
+        )}
+      </View>
+      <View style={styles.planInfo}>
+        <CustomText style={styles.planTitle}>{title}</CustomText>
+        <CustomText style={styles.planSubPrice}>{subPrice}</CustomText>
+      </View>
+    </View>
+    <View style={styles.planRight}>
+      <CustomText style={styles.planPrice}>{price}</CustomText>
+      <CustomText style={styles.planPerWeek}>{periodText}</CustomText>
+    </View>
+    {badge && !isActive && (
+      <View style={styles.saveBadge}>
+        <CustomText style={styles.saveBadgeText}>{badge}</CustomText>
+      </View>
+    )}
+    {isActive && (
+      <View
+        style={[
+          styles.saveBadge,
+          { backgroundColor: '#00C853', borderColor: '#00C853' },
+        ]}
+      >
+        <CustomText style={styles.saveBadgeText}>Current Plan</CustomText>
+      </View>
+    )}
+  </TouchableOpacity>
+);
 
 const PaywallModal = ({ visible, onClose }) => {
   const { t } = useTranslation();
@@ -72,11 +130,20 @@ const PaywallModal = ({ visible, onClose }) => {
     return null;
   };
 
-  const yearlyPrice = getSubPrice(Platform.OS === 'ios' ? 'com.dualshot.pro.yearly' : 'a_yearly') || '₹3,350.00';
-  const monthlyPrice = getSubPrice(Platform.OS === 'ios' ? 'com.dualshot.pro.monthly' : 'b_monthly') || '₹650.00';
+  // No hardcoded currency fallback here: subscriptions are region-priced, so a
+  // fixed default would show the wrong currency to non-Indian users whenever
+  // the store fetch is still loading or fails. `null` means "not ready yet"
+  // and the UI below shows a placeholder + disables purchase instead.
+  const yearlyPrice = getSubPrice(
+    Platform.OS === 'ios' ? SUBSCRIPTION_SKUS.ios.yearly : SUBSCRIPTION_SKUS.android.yearly,
+  );
+  const monthlyPrice = getSubPrice(
+    Platform.OS === 'ios' ? SUBSCRIPTION_SKUS.ios.monthly : SUBSCRIPTION_SKUS.android.monthly,
+  );
+  const pricesReady = !!(yearlyPrice && monthlyPrice);
 
   const getWeeklyPriceString = (formattedPrice) => {
-    if (!formattedPrice) return '₹64.42';
+    if (!formattedPrice) return null;
     const numericMatch = formattedPrice.match(/[\d,.]+/);
     if (!numericMatch) return formattedPrice;
     
@@ -91,9 +158,10 @@ const PaywallModal = ({ visible, onClose }) => {
   const yearlyWeeklyPrice = getWeeklyPriceString(yearlyPrice);
 
   const handleContinue = async () => {
-    const sku = Platform.OS === 'ios'
-      ? (selectedPlan === 'yearly' ? 'com.dualshot.pro.yearly' : 'com.dualshot.pro.monthly')
-      : (selectedPlan === 'yearly' ? 'a_yearly' : 'b_monthly');
+    if (!pricesReady) return;
+
+    const skus = Platform.OS === 'ios' ? SUBSCRIPTION_SKUS.ios : SUBSCRIPTION_SKUS.android;
+    const sku = selectedPlan === 'yearly' ? skus.yearly : skus.monthly;
 
     // Check if user already has this exact plan active
     if (isPro && activePlanId === sku) {
@@ -128,52 +196,7 @@ const PaywallModal = ({ visible, onClose }) => {
     }
   };
 
-  const FeatureItem = ({ text }) => (
-    <View style={styles.featureItem}>
-      <View style={styles.checkCircle}>
-        <Ionicons name="checkmark" size={moderateScale(14)} color="#000" />
-      </View>
-      <CustomText style={styles.featureText}>{text}</CustomText>
-    </View>
-  );
-
-  const PlanOption = ({ id, title, price, subPrice, badge, selected, periodText, isActive }) => (
-    <TouchableOpacity
-      style={[styles.planOption, selected && styles.planOptionSelected]}
-      onPress={() => setSelectedPlan(id)}
-      activeOpacity={0.8}
-    >
-      <View style={styles.planLeft}>
-        <View
-          style={[styles.radioOuter, selected && styles.radioOuterSelected]}
-        >
-          {selected && (
-            <Ionicons name="checkmark" size={moderateScale(14)} color="#000" />
-          )}
-        </View>
-        <View style={styles.planInfo}>
-          <CustomText style={styles.planTitle}>{title}</CustomText>
-          <CustomText style={styles.planSubPrice}>{subPrice}</CustomText>
-        </View>
-      </View>
-      <View style={styles.planRight}>
-        <CustomText style={styles.planPrice}>{price}</CustomText>
-        <CustomText style={styles.planPerWeek}>{periodText}</CustomText>
-      </View>
-      {badge && !isActive && (
-        <View style={styles.saveBadge}>
-          <CustomText style={styles.saveBadgeText}>{badge}</CustomText>
-        </View>
-      )}
-      {isActive && (
-        <View style={[styles.saveBadge, { backgroundColor: '#00C853', borderColor: '#00C853' }]}>
-          <CustomText style={styles.saveBadgeText}>Current Plan</CustomText>
-        </View>
-      )}
-    </TouchableOpacity>
-  );
-
-  const isSelectedActive = 
+  const isSelectedActive =
     (selectedPlan === 'yearly' && activePlanId?.includes('year')) ||
     (selectedPlan === 'monthly' && activePlanId?.includes('month'));
 
@@ -191,7 +214,12 @@ const PaywallModal = ({ visible, onClose }) => {
             contentContainerStyle={styles.scrollContent}
           >
             {/* Close Button */}
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
               <Ionicons name="close" size={moderateScale(24)} color="#fff" />
             </TouchableOpacity>
 
@@ -244,20 +272,24 @@ const PaywallModal = ({ visible, onClose }) => {
                   <PlanOption
                     id="yearly"
                     title={t('oneYear')}
-                    subPrice={`${t('perYear')} ${yearlyPrice}`}
-                    price={yearlyWeeklyPrice}
+                    subPrice={
+                      yearlyPrice ? `${t('perYear')} ${yearlyPrice}` : t('perYear')
+                    }
+                    price={yearlyWeeklyPrice || '···'}
                     periodText={t('perWeek')}
                     badge={`${t('bestValue')} 90%`}
                     selected={selectedPlan === 'yearly'}
                     isActive={activePlanId?.includes('year')}
+                    onSelect={setSelectedPlan}
                   />
                   <PlanOption
                     id="monthly"
                     title={t('oneMonth')}
-                    price={monthlyPrice}
+                    price={monthlyPrice || '···'}
                     periodText={t('perMonth')}
                     selected={selectedPlan === 'monthly'}
                     isActive={activePlanId?.includes('month')}
+                    onSelect={setSelectedPlan}
                   />
                 </View>
 
@@ -266,13 +298,16 @@ const PaywallModal = ({ visible, onClose }) => {
                 </CustomText>
 
                 {/* Continue Button */}
-                <TouchableOpacity 
-                  style={styles.continueBtn} 
+                <TouchableOpacity
+                  style={[
+                    styles.continueBtn,
+                    !pricesReady && styles.continueBtnDisabled,
+                  ]}
                   activeOpacity={0.8}
                   onPress={handleContinue}
-                  disabled={isPurchasing}
+                  disabled={isPurchasing || !pricesReady}
                 >
-                  {isPurchasing ? (
+                  {isPurchasing || !pricesReady ? (
                     <ActivityIndicator color="#000" />
                   ) : (
                     <>
@@ -593,6 +628,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 5,
+  },
+  continueBtnDisabled: {
+    opacity: 0.6,
   },
   continueText: {
     fontSize: moderateScale(20),

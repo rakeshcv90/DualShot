@@ -26,12 +26,33 @@ class DualCameraMainViewManager : SimpleViewManager<TextureView>() {
         textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
             override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
                 Log.d(TAG, "Main surface available: ${w}x${h}")
-                val bw = DualCameraController.getResolutionWidth()
-                val bh = DualCameraController.getResolutionHeight()
-                st.setDefaultBufferSize(bw, bh)
-                
-                val surface = Surface(st)
-                DualCameraController.addPreviewSurface("main", surface)
+
+                // Register a surface provider instead of a one-time
+                // Surface. Every time createCaptureSession() runs, this
+                // provider is called to produce a fresh Surface with the
+                // correct buffer size — so Camera2 always negotiates the
+                // right output dimensions, even after the camera is
+                // closed and reopened (gallery visit, app resume, etc.).
+                DualCameraController.addSurfaceProvider("main") {
+                    textureView.surfaceTexture?.let { currentSt ->
+                        val bw = DualCameraController.getResolutionWidth()
+                        val bh = DualCameraController.getResolutionHeight()
+                        currentSt.setDefaultBufferSize(bw, bh)
+                        Surface(currentSt)
+                    }
+                }
+                // Lets DualCameraPipViewManager read live frames from this
+                // view via getBitmap() when it isn't getting its own real
+                // camera stream (front-camera recording — see
+                // DualCameraController.shouldFakePipDuringRecording()).
+                DualCameraController.registerMainTextureView(textureView)
+                // Recomputes the transform whenever a capture session
+                // actually finishes (re)configuring — covers the
+                // close/reopen-on-resume path where this surface itself
+                // never changes but the underlying stream does.
+                DualCameraController.registerTransformRefresh("main") {
+                    updateTransform(textureView, textureView.width, textureView.height)
+                }
                 updateTransform(textureView, w, h)
             }
 
@@ -40,7 +61,9 @@ class DualCameraMainViewManager : SimpleViewManager<TextureView>() {
             }
 
             override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
-                DualCameraController.removePreviewSurface("main")
+                DualCameraController.removeSurfaceProvider("main")
+                DualCameraController.unregisterTransformRefresh("main")
+                DualCameraController.unregisterMainTextureView()
                 return true
             }
 

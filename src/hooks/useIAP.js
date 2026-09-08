@@ -8,19 +8,17 @@ import {
   fetchProducts as fetchIAPProducts,
   purchaseUpdatedListener,
   purchaseErrorListener,
-  initConnection,
-  endConnection,
   finishTransaction,
   getAvailablePurchases,
 } from 'react-native-iap';
+import { ensureIAPConnection } from '../utils/iapConnection';
+import {
+  SUBSCRIPTION_SKUS,
+  ALL_SUBSCRIPTION_SKUS,
+} from '../utils/iapSkus';
 
-// Define your SKUs (Product IDs)
-// These must match exactly with your App Store Connect or Google Play Console listings
-const SKU_IOS_SUBSCRIPTIONS = [
-  'com.dualshot.pro.monthly',
-  'com.dualshot.pro.yearly',
-];
-const SKU_ANDROID_SUBSCRIPTIONS = ['b_monthly', 'a_yearly'];
+const SKU_IOS_SUBSCRIPTIONS = Object.values(SUBSCRIPTION_SKUS.ios);
+const SKU_ANDROID_SUBSCRIPTIONS = Object.values(SUBSCRIPTION_SKUS.android);
 
 export const useIAP = () => {
   const dispatch = useDispatch();
@@ -38,7 +36,7 @@ export const useIAP = () => {
   useEffect(() => {
     const init = async () => {
       try {
-        await initConnection();
+        await ensureIAPConnection();
         setConnected(true);
         console.log('IAP Connection Initialized');
 
@@ -162,9 +160,14 @@ export const useIAP = () => {
 
       const purchases = await getAvailablePurchases();
       console.log('Purchases fetched:', purchases);
-      if (purchases && purchases.length > 0) {
+      // Only trust records for this app's own subscription SKUs — a stale
+      // or unrelated entry from the store's own cache shouldn't grant Pro.
+      const validPurchases = (purchases || []).filter(purchase =>
+        ALL_SUBSCRIPTION_SKUS.includes(purchase.productId),
+      );
+      if (validPurchases.length > 0) {
         // Extract product IDs from the available purchases
-        const productIds = purchases.map(purchase => purchase.productId);
+        const productIds = validPurchases.map(purchase => purchase.productId);
 
         // Update user purchases
         setUserPurchases(prev => {
@@ -180,7 +183,7 @@ export const useIAP = () => {
         dispatch(setActivePlan(productIds[0]));
 
         setIsPurchasing(false);
-        return { success: true, count: purchases.length };
+        return { success: true, count: validPurchases.length };
       } else {
         // No active subscriptions found - explicitly remove PRO access
         storage.set('isPro', false);
@@ -203,17 +206,6 @@ export const useIAP = () => {
     return userPurchases.includes(subscriptionSku);
   };
 
-  const disconnect = async () => {
-    try {
-      if (connected) {
-        await endConnection();
-        setConnected(false);
-      }
-    } catch (err) {
-      console.log('Error disconnecting IAP:', err);
-    }
-  };
-
   return {
     connected,
     subscriptions,
@@ -223,7 +215,6 @@ export const useIAP = () => {
     requestBuySubscription,
     checkSubscriptionStatus,
     fetchProducts: loadSubscriptions,
-    disconnect,
     restorePurchases,
   };
 };

@@ -2,6 +2,7 @@ package com.cvinfotech.dualshotrecorder.dualcamera
 
 import android.app.Activity
 import android.content.ContentValues
+import android.content.Intent
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -55,14 +56,112 @@ class DualCameraModule(private val reactContext: ReactApplicationContext) :
         DualCameraController.setTorch(enabled)
     }
 
+    /**
+     * Launches the device's gallery/photos app. Uses CATEGORY_APP_GALLERY —
+     * the purpose-built Android category for "open the gallery app" (API 27+)
+     * — instead of ACTION_VIEW on a raw MediaStore collection URI, which
+     * different gallery apps handle inconsistently (confirmed: at least one
+     * OEM gallery app, registered as a "Photos" handler, opened and then
+     * immediately failed to display anything for that URI, while Google
+     * Photos handled it fine). Falls back to an ACTION_VIEW image chooser
+     * for the rare gallery app that doesn't register the category.
+     */
     @ReactMethod
-    fun switchCamera(facing: String) {
-        val activity = getActivity() ?: return
+    fun openGallery(promise: Promise) {
+        val activity = getActivity()
+        if (activity == null) {
+            promise.reject("NO_ACTIVITY", "No activity available")
+            return
+        }
+        try {
+            val galleryIntent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_APP_GALLERY)
+            }
+            if (galleryIntent.resolveActivity(activity.packageManager) != null) {
+                activity.startActivity(galleryIntent)
+                promise.resolve(true)
+                return
+            }
+
+            val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*")
+            }
+            if (viewIntent.resolveActivity(activity.packageManager) != null) {
+                activity.startActivity(viewIntent)
+                promise.resolve(true)
+            } else {
+                promise.reject("NO_GALLERY_APP", "No gallery app found on this device")
+            }
+        } catch (e: Exception) {
+            promise.reject("OPEN_GALLERY_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun switchCamera(facing: String, config: ReadableMap?, promise: Promise) {
+        val activity = getActivity()
+        if (activity == null) {
+            promise.reject("NO_ACTIVITY", "No activity")
+            return
+        }
+        
+        val res = config?.getString("resolution")
+        val fps = if (config?.hasKey("fps") == true) config.getInt("fps") else null
+        val format = config?.getString("fileFormat")
+
+        // Resolve the target camera ID so updateSettings queries the NEW
+        // camera's supported sizes, not the one that's about to be closed.
+        val manager = activity.getSystemService(android.content.Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
+        val targetFacing = if (facing == "front")
+            android.hardware.camera2.CameraCharacteristics.LENS_FACING_FRONT
+        else
+            android.hardware.camera2.CameraCharacteristics.LENS_FACING_BACK
+        val targetCameraId = manager.cameraIdList.firstOrNull { id ->
+            val chars = manager.getCameraCharacteristics(id)
+            chars.get(android.hardware.camera2.CameraCharacteristics.LENS_FACING) == targetFacing
+        }
+        
         activity.runOnUiThread {
-            DualCameraController.closeCamera()
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                DualCameraController.openCamera(activity, facing)
-            }, 300)
+            DualCameraController.updateSettings(activity, res, fps, format, targetCameraId)
+            // Waits for the previous camera device to actually finish
+            // releasing (via CameraDevice.StateCallback.onClosed) before
+            // opening the new one, instead of guessing at a fixed delay —
+            // opening too soon after close on some devices/HALs left the
+            // new openCamera() call stalled with no callback ever firing,
+            // freezing the preview and silently failing recording.
+            DualCameraController.closeCamera {
+                DualCameraController.openCamera(activity, facing) { success ->
+                    promise.resolve(true)
+                }
+            }
+        }
+    }
+
+    /**
+     * Close-then-reopen the camera entirely on the native side, waiting for
+     * the real onClosed() callback instead of a JS-side setTimeout guess.
+     * Used when the app resumes from background (gallery visit, task switch)
+     * where the old camera session is dead and needs a clean restart.
+     */
+    @ReactMethod
+    fun reopenCamera(facing: String, config: ReadableMap?, promise: Promise) {
+        val activity = getActivity()
+        if (activity == null) {
+            promise.reject("NO_ACTIVITY", "No activity")
+            return
+        }
+
+        val res = config?.getString("resolution")
+        val fps = if (config?.hasKey("fps") == true) config.getInt("fps") else null
+        val format = config?.getString("fileFormat")
+
+        activity.runOnUiThread {
+            DualCameraController.updateSettings(activity, res, fps, format)
+            DualCameraController.closeCamera {
+                DualCameraController.openCamera(activity, facing) { success ->
+                    promise.resolve(success)
+                }
+            }
         }
     }
 

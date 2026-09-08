@@ -25,23 +25,18 @@ const settingsSlice = createSlice({
   reducers: {
     setResolution: (state, action) => {
       state.resolution = action.payload;
-      storage.set('settings_state', JSON.stringify(state));
     },
     setFps: (state, action) => {
       state.fps = action.payload;
-      storage.set('settings_state', JSON.stringify(state));
     },
     setFileFormat: (state, action) => {
       state.fileFormat = action.payload;
-      storage.set('settings_state', JSON.stringify(state));
     },
     setThemeMode: (state, action) => {
       state.themeMode = action.payload;
-      storage.set('settings_state', JSON.stringify(state));
     },
     setLanguage: (state, action) => {
       state.language = action.payload;
-      storage.set('settings_state', JSON.stringify(state));
     },
   },
 });

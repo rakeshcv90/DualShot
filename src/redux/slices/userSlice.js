@@ -27,11 +27,9 @@ const userSlice = createSlice({
   reducers: {
     setIsPro: (state, action) => {
       state.isPro = action.payload;
-      storage.set('user_state', JSON.stringify(state));
     },
     setActivePlan: (state, action) => {
       state.activePlanId = action.payload;
-      storage.set('user_state', JSON.stringify(state));
     },
   },
 });

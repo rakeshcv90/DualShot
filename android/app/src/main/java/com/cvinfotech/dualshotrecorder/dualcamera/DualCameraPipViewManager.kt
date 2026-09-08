@@ -1,6 +1,8 @@
 package com.cvinfotech.dualshotrecorder.dualcamera
 
 import android.graphics.SurfaceTexture
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.Surface
 import android.view.TextureView
@@ -17,7 +19,15 @@ class DualCameraPipViewManager : SimpleViewManager<TextureView>() {
     companion object {
         const val REACT_CLASS = "DualCameraPipView"
         private const val TAG = "DualPipView"
+
+        // ~6fps — this is a deliberately stepped fallback, not a smooth
+        // stream (see startFakePipLoop below), so there's no point spending
+        // more CPU/GC pressure on it than that.
+        private const val FAKE_PIP_INTERVAL_MS = 160L
     }
+
+    private val fakePipHandler = Handler(Looper.getMainLooper())
+    private var fakePipRunnable: Runnable? = null
 
     override fun getName() = REACT_CLASS
 
@@ -27,12 +37,30 @@ class DualCameraPipViewManager : SimpleViewManager<TextureView>() {
         textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
             override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
                 Log.d(TAG, "PIP surface available: ${w}x${h}")
-                val bw = DualCameraController.getResolutionWidth()
-                val bh = DualCameraController.getResolutionHeight()
-                st.setDefaultBufferSize(bw, bh)
-                
-                val surface = Surface(st)
-                DualCameraController.addPreviewSurface("pip", surface)
+
+                // Same surface-provider pattern as the main view —
+                // see DualCameraMainViewManager for the full rationale.
+                // Note this provider simply isn't called by
+                // createCaptureSession() while shouldFakePipDuringRecording()
+                // is true (recording on a camera whose hardware can't
+                // sustain a 3rd stream) — see startFakePipLoop below for
+                // what covers this view during that window instead.
+                DualCameraController.addSurfaceProvider("pip") {
+                    textureView.surfaceTexture?.let { currentSt ->
+                        val bw = DualCameraController.getResolutionWidth()
+                        val bh = DualCameraController.getResolutionHeight()
+                        currentSt.setDefaultBufferSize(bw, bh)
+                        Surface(currentSt)
+                    }
+                }
+                DualCameraController.registerTransformRefresh("pip") {
+                    updateTransform(textureView, textureView.width, textureView.height)
+                    if (DualCameraController.shouldFakePipDuringRecording()) {
+                        startFakePipLoop(textureView)
+                    } else {
+                        stopFakePipLoop()
+                    }
+                }
                 updateTransform(textureView, w, h)
             }
 
@@ -41,7 +69,9 @@ class DualCameraPipViewManager : SimpleViewManager<TextureView>() {
             }
 
             override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
-                DualCameraController.removePreviewSurface("pip")
+                stopFakePipLoop()
+                DualCameraController.removeSurfaceProvider("pip")
+                DualCameraController.unregisterTransformRefresh("pip")
                 return true
             }
 
@@ -49,6 +79,90 @@ class DualCameraPipViewManager : SimpleViewManager<TextureView>() {
         }
 
         return textureView
+    }
+
+    /**
+     * Fallback for when this view isn't getting a real camera stream (its
+     * surface provider above is skipped by createCaptureSession() while
+     * recording on hardware that can't sustain a 3rd concurrent stream —
+     * see DualCameraController.shouldFakePipDuringRecording()). Rather than
+     * leave pip frozen on its last frame for the whole recording, this
+     * periodically copies whatever the main view is currently showing (via
+     * TextureView.getBitmap(), which reads back its already-rendered
+     * content — no camera involved) and draws it directly onto this view's
+     * own SurfaceTexture via lockCanvas()/unlockCanvasAndPost(). That's the
+     * same pair TextureView itself uses internally for non-camera (CPU
+     * Canvas) drawing, so it's safe to use here precisely because nothing
+     * else is targeting this SurfaceTexture for the same window (the real
+     * provider above is what's skipped).
+     *
+     * This deliberately does NOT try to reproduce pip's usual independent
+     * mirroring — it just shows a small copy of whatever main currently
+     * looks like (already mirrored the same way main is), which during this
+     * window is visually reasonable since both would be showing the same
+     * single live camera anyway. Intentionally stepped (~6fps, not 30) to
+     * keep this cheap; it stops the moment the real stream resumes (the
+     * transformRefresh callback above re-checks every session change,
+     * including recording stop).
+     */
+    private fun startFakePipLoop(pipView: TextureView) {
+        if (fakePipRunnable != null) return // already running
+        // updateTransform() left a Matrix on this view sized to crop/mirror
+        // a full camera buffer (e.g. 1920x1080) into the view's bounds. The
+        // bitmap drawn below is already exactly pipView's own size — no
+        // cropping needed — so that stale matrix would instead scale/shift
+        // this correctly-sized content out of the visible area, leaving
+        // nothing but the view's black background on screen. Reset to
+        // identity for the duration; the real updateTransform() call that
+        // fires when recording stops restores the proper one.
+        pipView.setTransform(null)
+        // The SurfaceTexture's buffer is still sized for a full camera
+        // frame from the last time this view had a real stream (its
+        // provider above calls setDefaultBufferSize with the camera's
+        // resolution, e.g. 1920x1080) — lockCanvas() below returns a canvas
+        // matching THAT buffer size, not the view's own on-screen pixel
+        // size. Drawing a small view-sized bitmap onto a canvas that much
+        // bigger only fills a corner of it, leaving the rest black. Resize
+        // the buffer to match the view's actual bounds so the two agree;
+        // the provider resets this back to full camera resolution itself
+        // the next time it's actually called (recording stop).
+        val pw = pipView.width.coerceAtLeast(1)
+        val ph = pipView.height.coerceAtLeast(1)
+        pipView.surfaceTexture?.setDefaultBufferSize(pw, ph)
+        val runnable = object : Runnable {
+            override fun run() {
+                if (!DualCameraController.shouldFakePipDuringRecording()) {
+                    fakePipRunnable = null
+                    return // real stream is back; let it take over untouched
+                }
+                val mainView = DualCameraController.getMainTextureView()
+                val pipW = pipView.width
+                val pipH = pipView.height
+                if (mainView != null && mainView.isAvailable && pipView.isAvailable && pipW > 0 && pipH > 0) {
+                    try {
+                        val bitmap = mainView.getBitmap(pipW, pipH)
+                        val canvas = if (bitmap != null) pipView.lockCanvas() else null
+                        if (canvas != null && bitmap != null) {
+                            try {
+                                canvas.drawBitmap(bitmap, 0f, 0f, null)
+                            } finally {
+                                pipView.unlockCanvasAndPost(canvas)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Fake pip snapshot failed", e)
+                    }
+                }
+                fakePipHandler.postDelayed(this, FAKE_PIP_INTERVAL_MS)
+            }
+        }
+        fakePipRunnable = runnable
+        fakePipHandler.post(runnable)
+    }
+
+    private fun stopFakePipLoop() {
+        fakePipRunnable?.let { fakePipHandler.removeCallbacks(it) }
+        fakePipRunnable = null
     }
 
     /**

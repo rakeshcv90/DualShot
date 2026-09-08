@@ -511,36 +511,39 @@ const OnboardingQuestions = ({ navigation }) => {
               permissions[p.id] && { borderColor: '#34C759' },
             ]}
           >
-            <View
-              style={[
-                styles.iconBox,
-                { backgroundColor: isDark ? '#1a1a1a' : '#f1f5f9' },
-              ]}
-            >
-              <CustomText>{p.icon}</CustomText>
-            </View>
-            <View style={styles.textDetails}>
-              <CustomText style={[styles.optionTitle, { color: colors.text }]}>
-                {p.name}
-              </CustomText>
-              <CustomText
-                style={[styles.optionDesc, { color: colors.mutedText }]}
+            <View style={styles.permissionCardTop}>
+              <View
+                style={[
+                  styles.iconBox,
+                  { backgroundColor: isDark ? '#1a1a1a' : '#f1f5f9' },
+                ]}
               >
-                {p.desc}
-              </CustomText>
-            </View>
-            {permissions[p.id] ? (
-              <View style={[styles.tickCircle, { backgroundColor: '#34C759' }]}>
-                <Ionicons
-                  name="checkmark"
-                  size={moderateScale(16, 0.3)}
-                  color={colors.white}
-                />
+                <CustomText>{p.icon}</CustomText>
               </View>
-            ) : (
+              <View style={styles.textDetails}>
+                <CustomText style={[styles.optionTitle, { color: colors.text }]}>
+                  {p.name}
+                </CustomText>
+                <CustomText
+                  style={[styles.optionDesc, { color: colors.mutedText }]}
+                >
+                  {p.desc}
+                </CustomText>
+              </View>
+              {permissions[p.id] && (
+                <View style={[styles.tickCircle, { backgroundColor: '#34C759' }]}>
+                  <Ionicons
+                    name="checkmark"
+                    size={moderateScale(16, 0.3)}
+                    color={colors.white}
+                  />
+                </View>
+              )}
+            </View>
+            {!permissions[p.id] && (
               <TouchableOpacity
                 style={[
-                  styles.allowBtn,
+                  styles.allowBtnFull,
                   { backgroundColor: colors.primary },
                   loadingPermission === p.id && { opacity: 0.7 },
                 ]}
@@ -553,7 +556,7 @@ const OnboardingQuestions = ({ navigation }) => {
                   <CustomText
                     style={[styles.allowBtnText, { color: colors.white }]}
                   >
-                 Continue
+                    Continue
                   </CustomText>
                 )}
               </TouchableOpacity>
@@ -1144,8 +1147,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   permissionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#111',
     paddingVertical: moderateScale(14, 0.3),
     paddingHorizontal: moderateScale(14, 0.3),
@@ -1156,6 +1157,14 @@ const styles = StyleSheet.create({
     borderColor: '#4CAF50',
     borderWidth: 1.5,
     backgroundColor: 'rgba(76, 175, 80, 0.05)',
+  },
+  // Icon + title/description + checkmark row. The "Continue" button lives
+  // on its own full-width row below (see allowBtnFull) instead of squeezed
+  // into this row — the longer permission descriptions (e.g. camera) would
+  // otherwise be tight enough against the button to look like they collide.
+  permissionCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   tickCircle: {
     width: moderateScale(32, 0.3),
@@ -1170,6 +1179,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: moderateScale(16, 0.3),
     paddingVertical: moderateScale(8, 0.3),
     borderRadius: moderateScale(20, 0.3),
+  },
+  allowBtnFull: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: moderateScale(10, 0.3),
+    borderRadius: moderateScale(20, 0.3),
+    marginTop: moderateScale(12, 0.3),
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   allowedBtn: { backgroundColor: '#222' },
   allowBtnText: {

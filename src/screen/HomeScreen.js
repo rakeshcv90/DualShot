@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSelector } from 'react-redux';
+import { useIsFocused } from '@react-navigation/native';
 import {
   View,
   StyleSheet,
@@ -11,7 +12,6 @@ import {
   Platform,
   Modal,
   Alert,
-  Linking,
   AppState,
   PanResponder,
   BackHandler,
@@ -24,6 +24,7 @@ import { COLORS } from '../theme/theme';
 import CustomText from '../component/CustomText';
 import { useTranslation } from '../hooks/useTranslation';
 import ProcessingOverlay from '../component/ProcessingOverlay';
+import RecordTimer from '../component/RecordTimer';
 import {
   DualCameraMainView,
   DualCameraPipView,
@@ -33,8 +34,43 @@ import MediaToolkit from 'react-native-media-toolkit';
 import { loadImage } from 'react-native-nitro-image';
 import PaywallModal from '../component/PaywallModal';
 import { storage } from '../storage/storage';
+import { FFmpegKit, ReturnCode } from '@wokcito/ffmpeg-kit-react-native';
 
 const { width, height } = Dimensions.get('window');
+
+/**
+ * Android's MediaRecorder has no native QuickTime/.mov muxer (see
+ * DualCameraController.kt) — a recorded file is always genuinely MP4
+ * content. When "MOV" is selected, this remuxes it into a real QuickTime
+ * container via a stream copy (-c copy — no re-encode, fast, lossless).
+ * Falls back to the original MP4 path if the remux fails for any reason,
+ * so a conversion hiccup never loses the recording. iOS doesn't need this:
+ * its native capture output already is QuickTime (see
+ * DualCameraController.swift's RecordingDelegate).
+ */
+const remuxToMov = async mp4Path => {
+  const movPath = mp4Path.replace(/\.mp4$/i, '.mov');
+  try {
+    const session = await FFmpegKit.executeWithArguments([
+      '-y',
+      '-i',
+      mp4Path,
+      '-c',
+      'copy',
+      '-f',
+      'mov',
+      movPath,
+    ]);
+    const returnCode = await session.getReturnCode();
+    if (ReturnCode.isSuccess(returnCode)) {
+      return movPath;
+    }
+    console.log('MOV remux failed (non-zero return code), keeping MP4');
+  } catch (err) {
+    console.log('MOV remux error, keeping MP4:', err);
+  }
+  return mp4Path;
+};
 
 const HomeScreen = ({ navigation }) => {
   const { t } = useTranslation();
@@ -44,16 +80,17 @@ const HomeScreen = ({ navigation }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [cameraPosition, setCameraPosition] = useState('back');
   const [flashMode, setFlashMode] = useState('off');
-  const [timer, setTimer] = useState(0);
   const [lastMedia, setLastMedia] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [portraitDone, setPortraitDone] = useState(false);
   const [landscapeDone, setLandscapeDone] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
+  const [videoSegments, setVideoSegments] = useState([]);
+  const [isFlipping, setIsFlipping] = useState(false);
 
-  const [pipSize, setPipSize] = useState(1);
-  const [cameraReady, setCameraReady] = useState(false);
+  const [pipSize, setPipSize] = useState(2);
+  const isFocused = useIsFocused();
 
   const pan = useRef(new Animated.ValueXY()).current;
 
@@ -65,11 +102,15 @@ const HomeScreen = ({ navigation }) => {
         return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
       },
       onPanResponderGrant: () => {
-        pan.setOffset({
-          x: pan.x._value,
-          y: pan.y._value,
-        });
+        pan.extractOffset();
       },
+      // PanResponder calls onPanResponderMove as a plain direct function
+      // call (see PanResponder.js's _updateGestureStateOnMove) — it doesn't
+      // go through the special native-prop attachment that onScroll etc.
+      // use, so Animated.event's useNativeDriver:true form (which returns
+      // an AnimatedEvent object, not a callable function) crashes here with
+      // "Object is not a function" the moment a drag starts. Native driver
+      // genuinely isn't usable with plain PanResponder at this call site.
       onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
         useNativeDriver: false,
       }),
@@ -80,34 +121,47 @@ const HomeScreen = ({ navigation }) => {
   ).current;
 
   const PIP_SIZES = [
-    { w: moderateScale(110) },
     { w: moderateScale(150) },
-    { w: moderateScale(200) },
+    { w: moderateScale(180) },
+    { w: moderateScale(220) },
+    { w: moderateScale(250) },
   ];
 
   const currentPip = PIP_SIZES[pipSize];
 
-  const timerRef = useRef(null);
   const recordPulse = useRef(new Animated.Value(1)).current;
   const insets = useSafeAreaInsets();
   const dualCamera = useDualCamera();
 
   // Open camera on mount
+  const appliedCameraConfig = useRef({ resolution, fps });
+  const isMountEffectDone = useRef(false);
+
+  // Both the AppState resume handler and the settings-change effect below
+  // need to close then reopen the camera. This is now done entirely on the
+  // native side via dualCamera.reopenCamera(), which waits for the real
+  // CameraDevice.onClosed() callback before opening the new camera —
+  // no more fixed-delay setTimeout guesswork that could race with the HAL.
+  const isReopening = useRef(false);
+
   useEffect(() => {
     dualCamera.openCamera(cameraPosition, { resolution, fps });
-    setCameraReady(true);
+    isMountEffectDone.current = true;
 
     return () => {
       dualCamera.closeCamera();
     };
   }, []);
 
-  // Show Paywall automatically if user is not Pro
-  useEffect(() => {
-    if (isPro === false) {
-      setShowPaywall(true);
-    }
-  }, [isPro]);
+  // SUBSCRIPTION GATE DISABLED FOR NOW — uncomment to re-enable the
+  // auto-paywall-after-free-shot flow. useIAP/useProValidation keep running
+  // in the background regardless, so isPro stays accurate for whenever this
+  // is switched back on.
+  // useEffect(() => {
+  //   if (isPro === false && storage.getBoolean('hasUsedFreeShot')) {
+  //     setShowPaywall(true);
+  //   }
+  // }, [isPro]);
 
   // Handle Back Button for Exit
   useEffect(() => {
@@ -134,38 +188,61 @@ const HomeScreen = ({ navigation }) => {
         appStateRef.current.match(/inactive|background/) &&
         nextState === 'active'
       ) {
-        dualCamera.closeCamera();
-        setTimeout(() => {
-          dualCamera.openCamera(cameraPosition);
-        }, 300);
+        // Don't reopen while recording — the recording owns the camera
+        // lifecycle, and reopening mid-record would corrupt the session.
+        if (isRecording) return;
+        // Don't reopen if another reopen is already in flight.
+        if (isReopening.current) return;
+        isReopening.current = true;
+        // Native reopenCamera waits for the real onClosed() callback
+        // before opening — no fixed-delay guesswork.
+        dualCamera
+          .reopenCamera(cameraPosition, { resolution, fps })
+          .catch(e => console.log('Reopen camera on resume error:', e))
+          .finally(() => {
+            isReopening.current = false;
+          });
       }
       appStateRef.current = nextState;
     };
     const subscription = AppState.addEventListener('change', handleAppState);
     return () => subscription.remove();
-  }, [cameraPosition]);
+  }, [cameraPosition, resolution, fps, isRecording]);
 
+  // Re-apply resolution/fps to the live camera when they change in Settings.
+  // Settings/Language stay mounted on the nav stack underneath Home, so this
+  // only actually reopens the camera once Home is focused again — otherwise
+  // it would reopen a camera that's hidden behind another screen. It also
+  // skips the run that fires right after the mount effect above (which
+  // already opened the camera with these exact settings) and no-ops if
+  // nothing actually changed while the screen was unfocused.
   useEffect(() => {
-    if (cameraReady) {
-      dualCamera.openCamera(cameraPosition, { resolution, fps });
-    }
-  }, [resolution, fps, cameraReady]);
+    if (!isMountEffectDone.current) return;
+    if (!isFocused) return;
 
-  // Timer
-  useEffect(() => {
-    if (isRecording) {
-      timerRef.current = setInterval(() => setTimer(prev => prev + 1), 1000);
-    } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      setTimer(0);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isRecording]);
+    const changed =
+      appliedCameraConfig.current.resolution !== resolution ||
+      appliedCameraConfig.current.fps !== fps;
+    if (!changed) return;
+
+    // Must close before reopening — the camera is already open at this
+    // point (this effect only reopens an existing session, unlike the
+    // mount effect), and calling Camera2's openCamera() again on an
+    // already-open device without closing it first is invalid usage. It
+    // doesn't reliably fail cleanly; it can corrupt the existing session's
+    // preview instead, which is what produced the stretched preview after
+    // changing a setting and returning to Home. Native reopenCamera also
+    // guards against this racing an overlapping AppState-triggered reopen.
+    if (isReopening.current) return;
+    isReopening.current = true;
+    dualCamera
+      .reopenCamera(cameraPosition, { resolution, fps })
+      .catch(e => console.log('Reopen camera on settings change error:', e))
+      .finally(() => {
+        isReopening.current = false;
+      });
+    appliedCameraConfig.current = { resolution, fps };
+  }, [resolution, fps, isFocused]);
 
   // Pulse animation
   useEffect(() => {
@@ -189,13 +266,6 @@ const HomeScreen = ({ navigation }) => {
     }
   }, [isRecording]);
 
-  const formatTime = s => {
-    const h = String(Math.floor(s / 3600)).padStart(2, '0');
-    const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
-    const sec = String(s % 60).padStart(2, '0');
-    return `${h}:${m}:${sec}`;
-  };
-
   const toggleFlash = () => {
     const next = flashMode === 'off' ? 'on' : 'off';
     setFlashMode(next);
@@ -204,13 +274,7 @@ const HomeScreen = ({ navigation }) => {
 
   const openGallery = async () => {
     try {
-      if (Platform.OS === 'ios') {
-        // Direct launch of iOS native Apple Photos app
-        await Linking.openURL('photos-redirect://');
-      } else {
-        // Launch Android native gallery/media app
-        await Linking.openURL('content://media/internal/images/media');
-      }
+      await dualCamera.openGallery();
     } catch (err) {
       console.log('Open native gallery error:', err);
       Alert.alert(t('gallery'), t('galleryDescription'));
@@ -218,9 +282,124 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const flipCamera = () => {
-    const next = cameraPosition === 'back' ? 'front' : 'back';
-    setCameraPosition(next);
-    dualCamera.switchCamera(next);
+    if (isFlipping) return;
+
+    if (isRecording) {
+      setIsFlipping(true);
+
+      dualCamera
+        .stopRecording()
+        .then(path => {
+          if (path) {
+            setVideoSegments(prev => [...prev, path]);
+          }
+
+          const next = cameraPosition === 'back' ? 'front' : 'back';
+          setCameraPosition(next);
+
+          dualCamera
+            .switchCamera(next)
+            .then(() => {
+              dualCamera
+                .startRecording({ resolution, fps, fileFormat })
+                .then(() => {
+                  setIsFlipping(false);
+                })
+                .catch(err => {
+                  console.log('Resume recording failed', err);
+                  setIsFlipping(false);
+                  setIsRecording(false);
+
+                  // Try to salvage what was recorded
+                  if (videoSegments.length > 0) {
+                    concatSegments(videoSegments).then(finalPath => {
+                      if (finalPath) processVideo(finalPath);
+                      setVideoSegments([]);
+                    });
+                  }
+                });
+            })
+            .catch(err => {
+              console.log('Switch camera failed', err);
+              setIsFlipping(false);
+              setIsRecording(false);
+            });
+        })
+        .catch(err => {
+          console.log('Stop segment failed', err);
+          setIsFlipping(false);
+        });
+    } else {
+      setIsFlipping(true);
+      const next = cameraPosition === 'back' ? 'front' : 'back';
+      setCameraPosition(next);
+      dualCamera
+        .switchCamera(next, { resolution, fps })
+        .catch(e => console.log('Switch err', e))
+        .finally(() => setIsFlipping(false));
+      // const next = cameraPosition === 'back' ? 'front' : 'back';
+      // setCameraPosition(next);
+      // dualCamera.switchCamera(next, { resolution, fps }).catch(e => console.log("Switch err", e));
+    }
+  };
+
+  const concatSegments = async segments => {
+    if (!segments || segments.length === 0) return null;
+    if (segments.length === 1) return segments[0];
+
+    console.log('Concatenating segments:', segments);
+    const timestamp = Date.now();
+    // Derive output path from the first segment's path
+    const outPath = segments[0].replace(/\.[^.]+$/, `_concat_${timestamp}.mp4`);
+
+    let inputs = [];
+    let filterStr = '';
+    for (let i = 0; i < segments.length; i++) {
+      inputs.push('-i', segments[i]);
+      // Use scale with standard dimensions, but force standard SAR and allow
+      // FFmpeg to auto-rotate if needed. We use a safe scaling approach.
+      filterStr += `[${i}:v]scale=${
+        resolution === '4K' ? '3840:2160' : '1920:1080'
+      }:force_original_aspect_ratio=decrease,pad=${
+        resolution === '4K' ? '3840:2160' : '1920:1080'
+      }:(ow-iw)/2:(oh-ih)/2,setsar=1[v${i}]; `;
+    }
+
+    let concatStr = '';
+    for (let i = 0; i < segments.length; i++) {
+      concatStr += `[v${i}][${i}:a]`;
+    }
+    filterStr += `${concatStr}concat=n=${segments.length}:v=1:a=1[outv][outa]`;
+
+    const args = [
+      '-y',
+      ...inputs,
+      '-filter_complex',
+      filterStr,
+      '-map',
+      '[outv]',
+      '-map',
+      '[outa]',
+      '-c:v',
+      'libx264',
+      '-preset',
+      'ultrafast',
+      outPath,
+    ];
+
+    try {
+      const session = await FFmpegKit.executeWithArguments(args);
+      const returnCode = await session.getReturnCode();
+      if (ReturnCode.isSuccess(returnCode)) {
+        return outPath;
+      }
+      const logs = await session.getOutput();
+      console.log('FFmpeg concat failed', logs);
+    } catch (e) {
+      console.log('Concat error', e);
+    }
+    // Fallback to first segment if concat fails
+    return segments[0];
   };
 
   const processVideo = async videoPath => {
@@ -228,10 +407,21 @@ const HomeScreen = ({ navigation }) => {
     setPortraitDone(false);
     setLandscapeDone(false);
 
+    // See remuxToMov above — iOS's raw recording is already QuickTime, so
+    // only Android needs this conversion when MOV is selected. The crop
+    // step below always reads from the original (unremuxed) recording —
+    // MediaToolkit's crop pipeline is only exercised against MP4 input
+    // today, so this keeps that behavior unchanged and only converts each
+    // *output* file to MOV once it's ready.
+    const wantsMov = Platform.OS === 'android' && fileFormat === 'MOV';
     const videoUri = `file://${videoPath}`;
 
     try {
-      await CameraRoll.save(videoUri, { type: 'video', album: 'DualShot' });
+      const portraitPath = wantsMov ? await remuxToMov(videoPath) : videoPath;
+      await CameraRoll.save(`file://${portraitPath}`, {
+        type: 'video',
+        album: 'DualShot',
+      });
       setPortraitDone(true);
     } catch (err) {
       console.log('Portrait save error:', err);
@@ -284,7 +474,14 @@ const HomeScreen = ({ navigation }) => {
       });
 
       let outPath = landscapeResult.uri;
-      if (!outPath.startsWith('file://')) {
+      const outLocalPath = outPath.startsWith('file://')
+        ? outPath.slice('file://'.length)
+        : outPath;
+
+      if (wantsMov) {
+        const movPath = await remuxToMov(outLocalPath);
+        outPath = `file://${movPath}`;
+      } else if (!outPath.startsWith('file://')) {
         outPath = `file://${outPath}`;
       }
 
@@ -376,42 +573,64 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const handleRecord = async () => {
-    if (isProcessing) return;
+    if (isProcessing || isFlipping) return;
 
-    // Check if free user is trying to capture more than their one free shot
-    if (isPro === false) {
-      const hasUsedFreeShot = storage.getBoolean('hasUsedFreeShot');
-      
-      // If they've used it, and they aren't currently trying to STOP a recording they started
-      if (hasUsedFreeShot && !isRecording) {
-        setShowPaywall(true);
-        return;
-      }
-    }
+    // SUBSCRIPTION GATE DISABLED FOR NOW — recording/photo capture is
+    // unlimited for everyone regardless of Pro status. Uncomment this block
+    // (and the two hasUsedFreeShot tracking lines below) to re-enable the
+    // one-free-shot-then-paywall flow.
+    // // Check if free user is trying to capture more than their one free shot
+    // if (isPro === false) {
+    //   const hasUsedFreeShot = storage.getBoolean('hasUsedFreeShot');
+    //
+    //   // If they've used it, and they aren't currently trying to STOP a recording they started
+    //   if (hasUsedFreeShot && !isRecording) {
+    //     setShowPaywall(true);
+    //     return;
+    //   }
+    // }
 
     if (mode === 'video') {
       if (isRecording) {
         setIsRecording(false);
+        setIsProcessing(true); // Show overlay while concatenating/processing
         try {
           const path = await dualCamera.stopRecording();
-          if (path) {
-            processVideo(path);
+          const allSegments = path ? [...videoSegments, path] : videoSegments;
+          setVideoSegments([]);
+
+          if (allSegments.length > 0) {
+            const finalVideoPath = await concatSegments(allSegments);
+            if (finalVideoPath) {
+              processVideo(finalVideoPath);
+            } else {
+              setIsProcessing(false);
+            }
+          } else {
+            setIsProcessing(false);
           }
         } catch (e) {
           console.log('Stop recording error:', e);
+          setIsProcessing(false);
         }
       } else {
         try {
           setIsRecording(true);
-          if (isPro === false) storage.set('hasUsedFreeShot', true);
+          setVideoSegments([]);
           await dualCamera.startRecording({ resolution, fps, fileFormat });
         } catch (e) {
+          console.log('Start recording error:', e);
           setIsRecording(false);
+          // Camera error 4 (fatal) kills the camera device — reopen it
+          // so the user sees a live preview instead of a frozen frame.
+          dualCamera
+            .reopenCamera(cameraPosition, { resolution, fps })
+            .catch(err => console.log('Reopen after recording failure:', err));
         }
       }
     } else if (mode === 'photo') {
       setIsProcessing(true); // Disable button immediately
-      if (isPro === false) storage.set('hasUsedFreeShot', true);
+      // if (isPro === false) storage.set('hasUsedFreeShot', true);
       setPortraitDone(false);
       setLandscapeDone(false);
       try {
@@ -436,7 +655,7 @@ const HomeScreen = ({ navigation }) => {
         translucent
       />
 
-      {/* ===== CAMERA PREVIEW WITH MARGINS ===== */}
+      {/* ===== FULL-BLEED CAMERA PREVIEW ===== */}
       <View style={styles.cameraContainer}>
         <DualCameraMainView style={StyleSheet.absoluteFill} />
       </View>
@@ -445,7 +664,14 @@ const HomeScreen = ({ navigation }) => {
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
         {/* TOP OVERLAY (Flash/Settings) */}
         <View style={[styles.topOverlay, { paddingTop: insets.top }]}>
-          <TouchableOpacity onPress={toggleFlash} style={styles.topBtn}>
+          <TouchableOpacity
+            onPress={toggleFlash}
+            style={styles.topBtn}
+            accessibilityRole="button"
+            accessibilityLabel={
+              flashMode === 'on' ? 'Turn flash off' : 'Turn flash on'
+            }
+          >
             <Ionicons
               name={flashMode === 'on' ? 'flash' : 'flash-off'}
               size={moderateScale(24)}
@@ -454,24 +680,25 @@ const HomeScreen = ({ navigation }) => {
           </TouchableOpacity>
 
           <View style={styles.centerTopContainer}>
-            {mode === 'video' && isRecording ? (
-              <View style={styles.timerContainer}>
-                <View style={styles.recDot} />
-                <CustomText style={styles.timerText}>
-                  {formatTime(timer)}
+            {mode === 'video' && <RecordTimer active={isRecording} />}
+
+            {/* SUBSCRIPTION UI DISABLED FOR NOW — uncomment alongside the
+                handleRecord gate above to restore the free-shot badge. */}
+            {/* {isPro === false && !storage.getBoolean('hasUsedFreeShot') && (
+              <View style={styles.freeBadge}>
+                <CustomText style={styles.freeBadgeText}>
+                  {t('freeShotBadge')}
                 </CustomText>
               </View>
-            ) : (
-              <CustomText style={styles.timerText}>00:00:00</CustomText>
-            )}
-
-            {/* 0:10 free badge */}
+            )} */}
           </View>
 
           <View style={styles.rightTopButtons}>
             <TouchableOpacity
               onPress={() => navigation.navigate('Settings')}
               style={styles.topBtn}
+              accessibilityRole="button"
+              accessibilityLabel={t('settings')}
             >
               <Ionicons
                 name="settings"
@@ -480,15 +707,19 @@ const HomeScreen = ({ navigation }) => {
               />
             </TouchableOpacity>
 
-            {!isPro && (
+            {/* SUBSCRIPTION UI DISABLED FOR NOW — uncomment to restore the
+                PRO upgrade badge. */}
+            {/* {!isPro && (
               <TouchableOpacity
                 onPress={() => setShowPaywall(true)}
                 style={styles.proHeaderBadge}
+                accessibilityRole="button"
+                accessibilityLabel="Upgrade to Pro"
               >
                 <Ionicons name="star" size={moderateScale(12)} color="#fff" />
                 <CustomText style={styles.proHeaderText}>PRO</CustomText>
               </TouchableOpacity>
-            )}
+            )} */}
           </View>
         </View>
 
@@ -511,11 +742,17 @@ const HomeScreen = ({ navigation }) => {
 
           <TouchableOpacity
             style={styles.pipResize}
-            onPress={() => setPipSize(prev => (prev + 1) % 3)}
+            onPress={() => setPipSize(prev => (prev + 1) % PIP_SIZES.length)}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Resize picture-in-picture view"
           >
             <Ionicons
-              name={pipSize < 2 ? 'expand-outline' : 'contract-outline'}
+              name={
+                pipSize < PIP_SIZES.length - 1
+                  ? 'expand-outline'
+                  : 'contract-outline'
+              }
               size={moderateScale(12)}
               color={COLORS.white}
             />
@@ -523,12 +760,7 @@ const HomeScreen = ({ navigation }) => {
         </Animated.View>
 
         {/* BOTTOM OVERLAY (Record + Mode tabs) */}
-        <View
-          style={[
-            styles.bottomOverlay,
-            { paddingBottom: insets.bottom + moderateScale(20) },
-          ]}
-        >
+        <View style={styles.bottomOverlay}>
           {/* Record Button Area */}
           <View style={styles.recordArea}>
             <Animated.View
@@ -546,6 +778,14 @@ const HomeScreen = ({ navigation }) => {
                   mode === 'photo' && styles.photoBtn,
                   isRecording && styles.recordingBtn,
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  mode === 'video'
+                    ? isRecording
+                      ? 'Stop recording'
+                      : 'Start recording'
+                    : 'Take photo'
+                }
               >
                 {isRecording && <View style={styles.recordingSquare} />}
               </TouchableOpacity>
@@ -553,8 +793,25 @@ const HomeScreen = ({ navigation }) => {
           </View>
 
           {/* Mode Tabs and Extras */}
-          <View style={styles.bottomBarImmersive}>
-            <TouchableOpacity onPress={openGallery} style={styles.bottomBtn}>
+          <View
+            style={[
+              styles.bottomBarImmersive,
+              // All bottom safe-area inset lives here, inside the black
+              // background, not on the outer bottomOverlay — otherwise a
+              // transparent gap remains below the bar whenever insets.bottom
+              // is non-zero (e.g. Android gesture nav; insets.bottom is 0
+              // with 3-button nav, which is why this only showed up on some
+              // devices/nav modes and not others).
+              { paddingBottom: insets.bottom + moderateScale(12) + moderateScale(20) },
+            ]}
+          >
+            <TouchableOpacity
+              onPress={openGallery}
+              style={styles.bottomBtn}
+              disabled={isRecording}
+              accessibilityRole="button"
+              accessibilityLabel={t('gallery')}
+            >
               <Ionicons
                 name="images"
                 size={moderateScale(28)}
@@ -566,11 +823,13 @@ const HomeScreen = ({ navigation }) => {
               <TouchableOpacity
                 onPress={() => setMode('video')}
                 style={[styles.modeTab]}
+                disabled={isRecording}
               >
                 <CustomText
                   style={[
                     styles.modeTabTextImmersive,
                     mode === 'video' && styles.modeTabTextActive,
+                    isRecording && { opacity: 0.5 },
                   ]}
                 >
                   {t('video')}
@@ -579,11 +838,13 @@ const HomeScreen = ({ navigation }) => {
               <TouchableOpacity
                 onPress={() => setMode('photo')}
                 style={[styles.modeTab]}
+                disabled={isRecording}
               >
                 <CustomText
                   style={[
                     styles.modeTabTextImmersive,
                     mode === 'photo' && styles.modeTabTextActive,
+                    isRecording && { opacity: 0.5 },
                   ]}
                 >
                   {t('photo')}
@@ -594,12 +855,14 @@ const HomeScreen = ({ navigation }) => {
             <TouchableOpacity
               onPress={flipCamera}
               style={styles.bottomBtn}
-              disabled={isRecording}
+              disabled={isFlipping}
+              accessibilityRole="button"
+              accessibilityLabel="Flip camera"
             >
               <Ionicons
                 name="repeat"
                 size={moderateScale(28)}
-                color={isRecording ? '#555' : COLORS.white}
+                color={isFlipping ? '#555' : COLORS.white}
               />
             </TouchableOpacity>
           </View>
@@ -613,10 +876,18 @@ const HomeScreen = ({ navigation }) => {
         resolution={resolution}
       />
 
-      <PaywallModal
-        visible={showPaywall}
-        onClose={() => setShowPaywall(false)}
-      />
+      {/* Mounted only when actually needed — PaywallModal's useIAP() hook
+          fires an expensive product-fetch on mount (observed to hang ~9s
+          on some devices/sandbox setups), and this was previously mounted
+          unconditionally, so every cold launch paid that cost immediately
+          on the Home screen regardless of whether the paywall was ever
+          shown — including while the subscription gate is disabled. */}
+      {showPaywall && (
+        <PaywallModal
+          visible={showPaywall}
+          onClose={() => setShowPaywall(false)}
+        />
+      )}
 
       {/* Exit Modal */}
       <Modal
@@ -684,15 +955,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   cameraContainer: {
+    // Full-bleed: fills the entire screen edge-to-edge. The native preview
+    // (DualCameraMainViewManager.kt) is in center-crop mode, so it always
+    // covers this whole area with no black margins — at the cost of showing
+    // a narrower field of view on screen than what actually gets recorded.
     position: 'absolute',
-    top: moderateScale(80),
-    bottom: moderateScale(150),
+    top: 0,
+    bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: '#000',
     overflow: 'hidden',
   },
-  // Immersive Overlays
+  // Immersive Overlays — transparent so the live camera feed shows through
+  // behind the floating controls, matching the full-bleed design.
   topOverlay: {
     position: 'absolute',
     top: 0,
@@ -703,7 +979,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: moderateScale(14),
-    backgroundColor: '#000',
+    backgroundColor: 'transparent',
   },
   centerTopContainer: {
     alignItems: 'center',
@@ -732,12 +1008,13 @@ const styles = StyleSheet.create({
   },
   bottomOverlay: {
     position: 'absolute',
+
     bottom: 0,
     left: 0,
     right: 0,
     height: moderateScale(180),
     alignItems: 'center',
-    backgroundColor: '#000',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
   },
   bottomBarImmersive: {
@@ -746,20 +1023,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: moderateScale(25),
+    paddingTop: moderateScale(12),
+    backgroundColor: '#000',
   },
   topBtn: {
     width: moderateScale(48),
     height: moderateScale(48),
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  timerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    paddingHorizontal: moderateScale(14),
-    paddingVertical: moderateScale(6),
-    borderRadius: moderateScale(20),
   },
   proHeaderBadge: {
     flexDirection: 'row',
@@ -779,11 +1050,9 @@ const styles = StyleSheet.create({
     marginLeft: moderateScale(4),
   },
   modeTabsImmersive: {
+    // No pill/capsule background — VIDEO/PHOTO float directly over the
+    // preview like the flash/settings icons, matching the reference design.
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: moderateScale(25),
-    paddingHorizontal: moderateScale(4),
-    paddingVertical: moderateScale(4),
   },
   modeTabTextImmersive: {
     color: '#fff',
@@ -810,7 +1079,7 @@ const styles = StyleSheet.create({
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.92)',
+    // backgroundColor: 'rgba(0,0,0,0.92)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: moderateScale(20),
@@ -931,20 +1200,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#fff',
   },
-  recDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF3B30',
-    marginRight: moderateScale(6),
-  },
-  timerText: {
-    color: COLORS.white,
-    fontSize: moderateScale(14),
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
-  },
-
   // PIP
   pipContainer: {
     position: 'absolute',

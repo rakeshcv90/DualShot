@@ -50,6 +50,17 @@ const IntroScreen = ({ navigation }) => {
   const flatListRef = useRef(null);
   const scrollX = useRef(new Animated.Value(0)).current;
 
+  // The text slides below are absolutely positioned (needed for the
+  // crossfade transition), so the container can't size itself off content
+  // the normal way. Titles wrap to a different number of lines per slide
+  // (and per language), so a single fixed height clips whichever slide is
+  // tallest. Measure every slide and size the container to the tallest one.
+  const [slideHeights, setSlideHeights] = useState({});
+  const textContainerHeight = Math.max(
+    moderateScale(140),
+    ...Object.values(slideHeights),
+  );
+
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
   const onViewableItemsChanged = useRef(({ viewableItems }) => {
@@ -129,7 +140,7 @@ const IntroScreen = ({ navigation }) => {
 
       {/* Text Section - Each slide text fades based on scroll */}
       <View style={styles.footer}>
-        <View style={styles.textContainer}>
+        <View style={[styles.textContainer, { minHeight: textContainerHeight }]}>
           {DATA.map((item, index) => {
             const inputRange = [
               (index - 0.5) * width,
@@ -160,6 +171,14 @@ const IntroScreen = ({ navigation }) => {
                   },
                 ]}
                 pointerEvents={index === currentIndex ? 'auto' : 'none'}
+                onLayout={e => {
+                  const height = e.nativeEvent.layout.height;
+                  setSlideHeights(prev =>
+                    prev[item.id] === height
+                      ? prev
+                      : { ...prev, [item.id]: height },
+                  );
+                }}
               >
                 <CustomText variant="h1" style={[styles.title, { color: colors.text }]}>
                   {item.title}{' '}
@@ -239,7 +258,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.md,
     position: 'relative',
-    minHeight: moderateScale(140), // Increased height to prevent cutting
+    // minHeight is set dynamically inline — see textContainerHeight above.
   },
   textSlide: {
     position: 'absolute',

@@ -4,6 +4,7 @@ import {
   NativeModules,
   StyleSheet,
   Platform,
+  Linking,
 } from 'react-native';
 
 // Native views
@@ -46,8 +47,17 @@ export const useDualCamera = () => {
     DualCameraModule.setTorch(enabled);
   };
 
-  const switchCamera = (facing) => {
-    DualCameraModule.switchCamera(facing);
+  const switchCamera = (facing, config = {}) => {
+    return DualCameraModule.switchCamera(facing, config);
+  };
+
+  /**
+   * Close-then-reopen the camera entirely on the native side, waiting
+   * for the real onClosed() callback instead of a JS setTimeout guess.
+   * Used when the app resumes from background (gallery, task switch).
+   */
+  const reopenCamera = (facing, config = {}) => {
+    return DualCameraModule.reopenCamera(facing, config);
   };
 
   const startRecording = async (config = {}) => {
@@ -61,6 +71,19 @@ export const useDualCamera = () => {
 
   const takePhoto = async () => {
     return await DualCameraModule.takePhoto();
+  };
+
+  const openGallery = async () => {
+    if (Platform.OS === 'android') {
+      // Uses CATEGORY_APP_GALLERY — the purpose-built Android category for
+      // launching the gallery app, far more reliably supported across OEM
+      // gallery apps than guessing at a MediaStore content:// URI (some
+      // gallery apps registered as photo viewers don't display anything
+      // for a raw collection URI passed via ACTION_VIEW).
+      return await DualCameraModule.openGallery();
+    }
+    // iOS: direct launch of the native Photos app.
+    return await Linking.openURL('photos-redirect://');
   };
 
   const savePhotoToGallery = async (filePath) => {
@@ -77,10 +100,12 @@ export const useDualCamera = () => {
     closeCamera,
     setTorch,
     switchCamera,
+    reopenCamera,
     startRecording,
     stopRecording,
     takePhoto,
     savePhotoToGallery,
+    openGallery,
   };
 };
 

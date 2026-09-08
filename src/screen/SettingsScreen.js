@@ -9,9 +9,12 @@ import {
   Dimensions,
   Switch,
   Image,
-  Clipboard,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
+import { openSettings } from 'react-native-permissions';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   setResolution,
@@ -26,13 +29,14 @@ import CustomText from '../component/CustomText';
 import Container from '../component/Container';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import {
-  generateRandomUserId,
+  getOrCreateUserId,
   getAppVersionString,
 } from '../utils/generateUserId';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 import { moderateScale } from 'react-native-size-matters';
 import { useTranslation } from '../hooks/useTranslation';
+import { useIAP } from '../hooks/useIAP';
 import PaywallModal from '../component/PaywallModal';
 
 const { width } = Dimensions.get('window');
@@ -61,16 +65,86 @@ const LANG_MAP = {
   // he: 'Hebrew',
 };
 
+const SectionHeader = ({ title, colors, isDark, isOpen = true }) => (
+  <View style={styles.sectionHeader}>
+    <CustomText
+      style={[styles.sectionTitle, { color: colors.text, fontWeight: '800' }]}
+    >
+      {title}
+    </CustomText>
+    <TouchableOpacity>
+      <View
+        style={[
+          styles.headerIconCircle,
+          { backgroundColor: isDark ? '#1a1a1a' : '#f1f5f9' },
+        ]}
+      >
+        <Ionicons
+          name={isOpen ? 'arrow-up' : 'arrow-down'}
+          size={moderateScale(12)}
+          color={colors.text}
+        />
+      </View>
+    </TouchableOpacity>
+  </View>
+);
+
+const SegmentedControl = ({ options, activeValue, onSelect, colors, isDark }) => (
+  <View
+    style={[
+      styles.segmentedContainer,
+      {
+        backgroundColor: isDark ? '#0f0f0f' : '#f1f5f9',
+        borderWidth: isDark ? 0 : 1,
+        borderColor: '#e2e8f0',
+      },
+    ]}
+  >
+    {options.map(opt => (
+      <TouchableOpacity
+        key={opt}
+        style={[
+          styles.segmentBtn,
+          activeValue === opt && {
+            backgroundColor: isDark ? '#d1d5db' : colors.primary,
+          },
+        ]}
+        onPress={() => onSelect(opt)}
+      >
+        <CustomText
+          style={[
+            styles.segmentText,
+            {
+              color:
+                activeValue === opt
+                  ? isDark
+                    ? '#000'
+                    : '#fff'
+                  : isDark
+                  ? '#888'
+                  : '#666',
+            },
+          ]}
+        >
+          {opt}
+        </CustomText>
+      </TouchableOpacity>
+    ))}
+  </View>
+);
+
 const SettingsScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { t } = useTranslation();
   const { resolution, fps, fileFormat, themeMode, language } = useSelector(
     state => state.settings,
   );
+  const isPro = useSelector(state => state.user?.isPro);
   const { colors, isDark } = useTheme();
   const [showPaywall, setShowPaywall] = useState(false);
+  const { restorePurchases, isPurchasing } = useIAP();
 
-  const [userId] = useState(() => generateRandomUserId());
+  const [userId] = useState(() => getOrCreateUserId());
 
   const isTablet = Platform.OS === 'ios' && Platform.isPad;
   const videoQualityOptions = isTablet ? ['1080p'] : ['1080p', '4K'];
@@ -85,73 +159,26 @@ const SettingsScreen = ({ navigation }) => {
     Clipboard.setString(userId);
   };
 
-  const SectionHeader = ({ title, isOpen = true }) => (
-    <View style={styles.sectionHeader}>
-      <CustomText
-        style={[styles.sectionTitle, { color: colors.text, fontWeight: '800' }]}
-      >
-        {title}
-      </CustomText>
-      <TouchableOpacity>
-        <View
-          style={[
-            styles.headerIconCircle,
-            { backgroundColor: isDark ? '#1a1a1a' : '#f1f5f9' },
-          ]}
-        >
-          <Ionicons
-            name={isOpen ? 'arrow-up' : 'arrow-down'}
-            size={moderateScale(12)}
-            color={colors.text}
-          />
-        </View>
-      </TouchableOpacity>
-    </View>
-  );
+  const handleRestorePurchases = async () => {
+    const result = await restorePurchases();
+    if (result.success) {
+      Alert.alert(
+        'Restore Complete',
+        result.count > 0
+          ? `Successfully restored ${result.count} purchase(s).`
+          : 'No active subscriptions found to restore.',
+      );
+    } else {
+      Alert.alert(
+        'Restore Failed',
+        result.error?.message || 'Could not restore purchases.',
+      );
+    }
+  };
 
-  const SegmentedControl = ({ options, activeValue, onSelect }) => (
-    <View
-      style={[
-        styles.segmentedContainer,
-        {
-          backgroundColor: isDark ? '#0f0f0f' : '#f1f5f9',
-          borderWidth: isDark ? 0 : 1,
-          borderColor: '#e2e8f0',
-        },
-      ]}
-    >
-      {options.map(opt => (
-        <TouchableOpacity
-          key={opt}
-          style={[
-            styles.segmentBtn,
-            activeValue === opt && {
-              backgroundColor: isDark ? '#d1d5db' : colors.primary,
-            },
-          ]}
-          onPress={() => onSelect(opt)}
-        >
-          <CustomText
-            style={[
-              styles.segmentText,
-              {
-                color:
-                  activeValue === opt
-                    ? isDark
-                      ? '#000'
-                      : '#fff'
-                    : isDark
-                    ? '#888'
-                    : '#666',
-              },
-            ]}
-          >
-            {opt}
-          </CustomText>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
+  const handleOpenNotificationSettings = () => {
+    openSettings().catch(() => {});
+  };
 
   return (
     <Container edges={['top', 'bottom', 'left', 'right']}>
@@ -162,6 +189,8 @@ const SettingsScreen = ({ navigation }) => {
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
         >
           <Ionicons
             name="chevron-back"
@@ -179,63 +208,68 @@ const SettingsScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <View
-          style={[
-            styles.proBanner,
-            {
-              backgroundColor: isDark ? '#1a1a1a' : colors.white,
-              borderColor: colors.primary,
-              borderWidth: 1.5,
-              shadowColor: isDark ? '#000' : colors.primary,
-              shadowOpacity: isDark ? 0.5 : 0.2,
-              shadowRadius: 15,
-              shadowOffset: { width: 0, height: 8 },
-              elevation: 12,
-            },
-          ]}
-        >
-          <View style={styles.proContent}>
-            <View
-              style={[
-                styles.proIconBox,
-                { backgroundColor: colors.primary + '20' },
-              ]}
-            >
-              <MaterialCommunityIcons
-                name="crown"
-                size={moderateScale(38)}
-                color={colors.primary}
-              />
-            </View>
-            <View style={styles.proTextBox}>
-              <CustomText style={[styles.proTitle, { color: colors.text }]}>
-                {t('proAccess')}
-              </CustomText>
-              <CustomText
-                style={[styles.proSubtext, { color: colors.mutedText }]}
-              >
-                {t('proBenefit')}
-              </CustomText>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.proButton, { backgroundColor: colors.primary }]}
-            onPress={() => setShowPaywall(true)}
+        {/* SUBSCRIPTION UI DISABLED FOR NOW — uncomment to restore the
+            "Get Pro Access" banner (matches HomeScreen.js's gate, which is
+            also currently disabled). */}
+        {/* {isPro !== true && (
+          <View
+            style={[
+              styles.proBanner,
+              {
+                backgroundColor: isDark ? '#1a1a1a' : colors.white,
+                borderColor: colors.primary,
+                borderWidth: 1.5,
+                shadowColor: isDark ? '#000' : colors.primary,
+                shadowOpacity: isDark ? 0.5 : 0.2,
+                shadowRadius: 15,
+                shadowOffset: { width: 0, height: 8 },
+                elevation: 12,
+              },
+            ]}
           >
-            <CustomText style={[styles.proButtonText, { color: colors.white }]}>
-              {t('upgradeNow')}
-            </CustomText>
-            <Ionicons
-              name="arrow-forward"
-              size={moderateScale(16)}
-              color={colors.white}
-            />
-          </TouchableOpacity>
-        </View>
+            <View style={styles.proContent}>
+              <View
+                style={[
+                  styles.proIconBox,
+                  { backgroundColor: colors.primary + '20' },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="crown"
+                  size={moderateScale(38)}
+                  color={colors.primary}
+                />
+              </View>
+              <View style={styles.proTextBox}>
+                <CustomText style={[styles.proTitle, { color: colors.text }]}>
+                  {t('proAccess')}
+                </CustomText>
+                <CustomText
+                  style={[styles.proSubtext, { color: colors.mutedText }]}
+                >
+                  {t('proBenefit')}
+                </CustomText>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.proButton, { backgroundColor: colors.primary }]}
+              onPress={() => setShowPaywall(true)}
+            >
+              <CustomText style={[styles.proButtonText, { color: colors.white }]}>
+                {t('upgradeNow')}
+              </CustomText>
+              <Ionicons
+                name="arrow-forward"
+                size={moderateScale(16)}
+                color={colors.white}
+              />
+            </TouchableOpacity>
+          </View>
+        )} */}
 
         <View style={styles.section}>
-          <SectionHeader title={t('camera')} />
+          <SectionHeader title={t('camera')} colors={colors} isDark={isDark} />
 
           <View style={styles.settingItem}>
             <View style={styles.itemLabelRow}>
@@ -252,6 +286,8 @@ const SettingsScreen = ({ navigation }) => {
               options={videoQualityOptions}
               activeValue={resolution}
               onSelect={val => dispatch(setResolution(val))}
+              colors={colors}
+              isDark={isDark}
             />
           </View>
 
@@ -270,6 +306,8 @@ const SettingsScreen = ({ navigation }) => {
               options={['24 fps', '30 fps', '60 fps']}
               activeValue={fps + ' fps'}
               onSelect={val => dispatch(setFps(parseInt(val)))}
+              colors={colors}
+              isDark={isDark}
             />
           </View>
 
@@ -288,6 +326,8 @@ const SettingsScreen = ({ navigation }) => {
               options={['MOV', 'MP4']}
               activeValue={fileFormat}
               onSelect={val => dispatch(setFileFormat(val))}
+              colors={colors}
+              isDark={isDark}
             />
           </View>
 
@@ -304,8 +344,10 @@ const SettingsScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.section}>
-          <SectionHeader title={t('account')} />
-          <TouchableOpacity
+          <SectionHeader title={t('account')} colors={colors} isDark={isDark} />
+          {/* SUBSCRIPTION UI DISABLED FOR NOW — uncomment to restore the
+              PRO+ upgrade row. */}
+          {/* <TouchableOpacity
             style={styles.rowItem}
             onPress={() => setShowPaywall(true)}
           >
@@ -324,8 +366,12 @@ const SettingsScreen = ({ navigation }) => {
               size={moderateScale(20)}
               color={colors.mutedText}
             />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.rowItem}>
+          </TouchableOpacity> */}
+          <TouchableOpacity
+            style={styles.rowItem}
+            onPress={handleRestorePurchases}
+            disabled={isPurchasing}
+          >
             <View style={styles.rowLeft}>
               <MaterialCommunityIcons
                 name="refresh"
@@ -336,16 +382,20 @@ const SettingsScreen = ({ navigation }) => {
                 {t('restorePurchases')}
               </CustomText>
             </View>
-            <Ionicons
-              name="arrow-forward-circle"
-              size={moderateScale(20)}
-              color={colors.mutedText}
-            />
+            {isPurchasing ? (
+              <ActivityIndicator size="small" color={colors.mutedText} />
+            ) : (
+              <Ionicons
+                name="arrow-forward-circle"
+                size={moderateScale(20)}
+                color={colors.mutedText}
+              />
+            )}
           </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
-          <SectionHeader title={t('preferences')} />
+          <SectionHeader title={t('preferences')} colors={colors} isDark={isDark} />
           <View style={[styles.settingItem, { marginTop: moderateScale(10) }]}>
             <View style={styles.itemLabelRow}>
               <Ionicons
@@ -364,9 +414,14 @@ const SettingsScreen = ({ navigation }) => {
                 (themeMode || 'system').slice(1)
               }
               onSelect={val => dispatch(setThemeMode(val.toLowerCase()))}
+              colors={colors}
+              isDark={isDark}
             />
           </View>
-          <TouchableOpacity style={styles.rowItem}>
+          <TouchableOpacity
+            style={styles.rowItem}
+            onPress={handleOpenNotificationSettings}
+          >
             <View style={styles.rowLeft}>
               <Ionicons
                 name="notifications-outline"
@@ -416,7 +471,7 @@ const SettingsScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.section}>
-          <SectionHeader title={t('appInfo')} />
+          <SectionHeader title={t('appInfo')} colors={colors} isDark={isDark} />
 
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
@@ -468,7 +523,11 @@ const SettingsScreen = ({ navigation }) => {
               >
                 {userId}
               </CustomText>
-              <TouchableOpacity onPress={handleCopyUserId}>
+              <TouchableOpacity
+                onPress={handleCopyUserId}
+                accessibilityRole="button"
+                accessibilityLabel="Copy user ID"
+              >
                 <Ionicons
                   name="copy-outline"
                   size={moderateScale(16)}

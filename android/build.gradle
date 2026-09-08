@@ -6,6 +6,13 @@ buildscript {
         targetSdkVersion = 36
         ndkVersion = "27.1.12297006"
         kotlinVersion = "2.1.20"
+        // "min" excludes the GPL-licensed codec libraries (x264, x265,
+        // vid.stab, xvidcore) that ffmpeg-kit's other package variants
+        // bundle — we only remux (copy an already-encoded stream into a
+        // different container) for the MOV file-format option, never
+        // re-encode, so we don't need any of those encoders. Keeps this
+        // dependency to LGPL-3.0 only.
+        ffmpegKitPackage = "min"
     }
     repositories {
         google()
