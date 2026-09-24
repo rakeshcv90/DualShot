@@ -1,4 +1,4 @@
-jest.mock('../../storage/storage', () => ({
+jest.mock('../../../storage/storage', () => ({
   storage: {
     getString: jest.fn(() => undefined),
     set: jest.fn(),
