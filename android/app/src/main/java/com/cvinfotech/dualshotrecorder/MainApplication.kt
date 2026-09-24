@@ -22,6 +22,9 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    // react-native-fbsdk-next auto-initializes the Facebook/Meta SDK via its
+    // ReactPackage (auto-linked). AppEventsLogger.activateApp() is called
+    // from the JS side in App.js once React Native is running.
     loadReactNative(this)
   }
 }

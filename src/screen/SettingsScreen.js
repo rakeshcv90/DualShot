@@ -38,6 +38,8 @@ import { moderateScale } from 'react-native-size-matters';
 import { useTranslation } from '../hooks/useTranslation';
 import { useIAP } from '../hooks/useIAP';
 import PaywallModal from '../component/PaywallModal';
+import CustomButton from '../component/CustomButton';
+import { AppEventsLogger } from 'react-native-fbsdk-next';
 
 const { width } = Dimensions.get('window');
 
@@ -89,7 +91,13 @@ const SectionHeader = ({ title, colors, isDark, isOpen = true }) => (
   </View>
 );
 
-const SegmentedControl = ({ options, activeValue, onSelect, colors, isDark }) => (
+const SegmentedControl = ({
+  options,
+  activeValue,
+  onSelect,
+  colors,
+  isDark,
+}) => (
   <View
     style={[
       styles.segmentedContainer,
@@ -395,7 +403,11 @@ const SettingsScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.section}>
-          <SectionHeader title={t('preferences')} colors={colors} isDark={isDark} />
+          <SectionHeader
+            title={t('preferences')}
+            colors={colors}
+            isDark={isDark}
+          />
           <View style={[styles.settingItem, { marginTop: moderateScale(10) }]}>
             <View style={styles.itemLabelRow}>
               <Ionicons
@@ -540,6 +552,12 @@ const SettingsScreen = ({ navigation }) => {
         </View>
         <View style={{ height: moderateScale(40) }} />
       </ScrollView>
+      {/* Test button for Facebook SDK */}
+      {/* <CustomButton title="Test FB Event" onPress={() => {
+          AppEventsLogger.logEvent('test_event_from_console');
+          AppEventsLogger.flush();
+          alert('FB Event Triggered and Flushed!');
+        }} /> */}
 
       <PaywallModal
         visible={showPaywall}

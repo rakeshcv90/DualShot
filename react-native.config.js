@@ -12,5 +12,10 @@ module.exports = {
         ios: null,
       },
     },
+    'react-native-fbsdk-next': {
+      platforms: {
+        ios: null, // Disable on iOS because it breaks RN 0.85 C++ Fabric (Sealable missing)
+      },
+    },
   },
 };

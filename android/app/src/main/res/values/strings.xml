@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">DualShot</string>
+
+    <!-- Meta / Facebook SDK Credentials -->
+    <!-- App ID for DualShot: https://developers.facebook.com/apps/2019040852016387 -->
+    <string name="facebook_app_id">2019040852016387</string>
+    <!-- Client Token: Meta for Developers → App Settings → Advanced → Client Token -->
+    <string name="facebook_client_token">e3b61e01fa4160a4679c65f127542699</string>
 </resources>

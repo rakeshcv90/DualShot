@@ -22,6 +22,7 @@
     "react": "19.2.3",
     "react-native": "0.85.3",
     "react-native-device-info": "^15.0.2",
+    "react-native-fbsdk-next": "^13.4.3",
     "react-native-iap": "^15.3.6",
     "react-native-media-toolkit": "^2.3.0",
     "react-native-mmkv": "^4.3.1",
